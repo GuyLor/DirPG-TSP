@@ -74,7 +74,7 @@ def run(opts):
     # Overwrite model parameters by parameters to load
     model_ = get_inner_model(model)
     model_.load_state_dict({**model_.state_dict(), **load_data.get('model', {})})
-
+    print(model_)
     # Initialize baseline
     if opts.baseline == 'exponential':
         baseline = ExponentialBaseline(opts.exp_beta)

@@ -36,12 +36,12 @@ class StateTSP(NamedTuple):
                 visited_=self.visited_[key],
                 lengths=self.lengths[key],
                 cur_coord=self.cur_coord[key] if self.cur_coord is not None else None,
+                i=self.i[key],
             )
         return super(StateTSP, self).__getitem__(key)
 
     @staticmethod
     def initialize(loc, visited_dtype=torch.uint8):
-
         batch_size, n_loc, _ = loc.size()
         prev_a = torch.zeros(batch_size, 1, dtype=torch.long, device=loc.device)
         return StateTSP(
@@ -61,7 +61,7 @@ class StateTSP(NamedTuple):
             ),
             lengths=torch.zeros(batch_size, 1, device=loc.device),
             cur_coord=None,
-            i=torch.zeros(1, dtype=torch.int64, device=loc.device)  # Vector with length num_steps
+            i=torch.zeros(batch_size, 1, dtype=torch.int64, device=loc.device)  # Vector with length num_steps
         )
 
     def get_final_cost(self):
@@ -71,11 +71,11 @@ class StateTSP(NamedTuple):
 
         return self.lengths + (self.loc[self.ids, self.first_a, :] - self.cur_coord).norm(p=2, dim=-1)
 
-    def update(self, selected):
+    def update(self, selected, update_length=True):
 
         # Update the state
-        prev_a = selected[:, None]  # Add dimension for step
-
+        #prev_a = selected[:, None]  # Add dimension for step
+        prev_a = selected[:, None]
         # Add the length
         # cur_coord = self.loc.gather(
         #     1,
@@ -83,16 +83,18 @@ class StateTSP(NamedTuple):
         # )[:, 0, :]
         cur_coord = self.loc[self.ids, prev_a]
         lengths = self.lengths
-        if self.cur_coord is not None:  # Don't add length for first action (selection of start node)
+        if update_length and self.cur_coord is not None:  # Don't add length for first action (selection of start node)
             lengths = self.lengths + (cur_coord - self.cur_coord).norm(p=2, dim=-1)  # (batch_dim, 1)
 
         # Update should only be called with just 1 parallel step, in which case we can check this way if we should update
-        first_a = prev_a if self.i.item() == 0 else self.first_a
 
+        first_a = prev_a if self.i[0].item() == 0 else self.first_a
+        #first_a = self.first_a
         if self.visited_.dtype == torch.uint8:
             # Add one dimension since we write a single value
             visited_ = self.visited_.scatter(-1, prev_a[:, :, None], 1)
         else:
+
             visited_ = mask_long_scatter(self.visited_, prev_a)
 
         return self._replace(first_a=first_a, prev_a=prev_a, visited_=visited_,
@@ -100,9 +102,11 @@ class StateTSP(NamedTuple):
 
     def all_finished(self):
         # Exactly n steps
-        return self.i.item() >= self.loc.size(-2)
+
+        return (self.i >= self.loc.size(-2)).data.any()
 
     def get_current_node(self):
+
         return self.prev_a
 
     def get_mask(self):
@@ -132,3 +136,71 @@ class StateTSP(NamedTuple):
 
     def construct_solutions(self, actions):
         return actions
+
+    def print_state(self):
+        print('----------   state ----------')
+        for s in self._fields:
+            if s == 'loc' or s == 'dist':
+                continue
+            print(s)
+            #print(getattr(self, s).size())
+            print(getattr(self, s))
+        print('----------------------------')
+
+
+    def stack_state(self,nodes_list):
+        ids, first_a, prev_a, cur_coord, visited_, lengths, i = [],[],[],[],[],[],[]
+        for node in nodes_list:
+            ids.append(node.id)
+            first_a.append(node.first_a)
+            prev_a.append([node.prefix[-1]] if len(node.prefix)>0 else [node.first_a])
+            mask = [0 if i in node.next_actions else 1 for i in range(self.loc.size(1))]
+            visited_.append([mask])
+            lengths.append(-node.lengths)
+            cur_coord.append(node.cur_coord)
+            i.append(node.t)
+
+        prev_a = torch.tensor(prev_a)
+        ids = torch.tensor(ids).unsqueeze(1)
+        #cur_coord = self.loc[ids, prev_a] if
+
+        new_state = self._replace(
+                            ids=ids,
+                            first_a=torch.tensor(first_a).unsqueeze(1),
+                            prev_a=prev_a,
+                            visited_=torch.tensor(visited_, dtype=torch.uint8),
+                            lengths=torch.tensor(lengths).unsqueeze(1),
+                            cur_coord=torch.stack(cur_coord).unsqueeze(1),
+                            i=torch.tensor(i).unsqueeze(1))
+
+        return new_state
+
+    """        
+    @staticmethod
+    def stack_state(loc,nodes_list):
+        ids, first_a, prev_a, visited_, lengths, i = [],[],[],[],[],[]
+        for node in nodes_list:
+            ids.append(node.id)
+            first_a.append(node.first_a)
+            prev_a.append([node.prefix[-1]] if len(node.prefix)>0 else [node.first_a.item()])
+            mask = [0 if i in node.next_actions else 1 for i in range(loc.size(1))]
+            visited_.append([mask])
+            lengths.append(-node.lengths)
+            i.append(node.t)
+
+        prev_a = torch.tensor(prev_a)
+        ids = torch.tensor(ids).unsqueeze(1)
+        new_state = StateTSP(
+                            loc=loc,
+                            dist=(loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1),
+                            ids=ids,
+                            first_a=torch.tensor(first_a).unsqueeze(1),
+                            prev_a=prev_a,
+                            visited_=torch.tensor(visited_, dtype=torch.uint8),
+                            lengths=torch.tensor(lengths).unsqueeze(1),
+                            cur_coord=loc[ids, prev_a],
+                            i=torch.tensor(i).unsqueeze(1))
+
+        return new_state
+    """
+
