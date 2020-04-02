@@ -2,7 +2,6 @@ import numpy as np
 import copy
 import time
 import torch
-from torch.nn import DataParallel
 import heapq
 from utils import utils_gumbel
 from problems.tsp.state_tsp import StateTSP
@@ -286,8 +285,6 @@ class DirPG:
     def __init__(self,
                  model,
                  ):
-
-        model = model.module if isinstance(model, DataParallel) else model
 
         self.encoder = model
         self.decoder = model.decoder
@@ -608,7 +605,7 @@ class DirectAstar(MinigridRL):
         y_opt_direct = utils.use_gpu(y)
         policy_loss = torch.sum(y_opt_direct*phi)/self.eps_grad
         return policy_loss
-                
+        
     def cross_entropy_loss(self,final_trajectories, elite_frac = 0.05):
         final_trajectories.sort(key=lambda x: x.reward, reverse=True)
         end = math.ceil(len(final_trajectories)*elite_frac)
@@ -619,7 +616,7 @@ class DirectAstar(MinigridRL):
         return ce_loss
 
     def train(self, num_episodes=500, seed = 1234):
-        
+    
         self.seed = seed
         rewards_opt_direct = []
         priority_opt_direct = []
