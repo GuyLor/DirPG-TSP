@@ -160,47 +160,18 @@ class StateTSP(NamedTuple):
             cur_coord.append(node.cur_coord)
             i.append(node.t)
 
-        prev_a = torch.tensor(prev_a)
-        ids = torch.tensor(ids).unsqueeze(1)
+        prev_a = torch.tensor(prev_a, device=self.loc.device)
+        ids = torch.tensor(ids, device=self.loc.device).unsqueeze(1)
         #cur_coord = self.loc[ids, prev_a] if
 
         new_state = self._replace(
                             ids=ids,
-                            first_a=torch.tensor(first_a).unsqueeze(1),
+                            first_a=torch.tensor(first_a, device=self.loc.device).unsqueeze(1),
                             prev_a=prev_a,
-                            visited_=torch.tensor(visited_, dtype=torch.uint8),
-                            lengths=torch.tensor(lengths).unsqueeze(1),
+                            visited_=torch.tensor(visited_, dtype=torch.uint8, device=self.loc.device),
+                            lengths=torch.tensor(lengths, device=self.loc.device).unsqueeze(1),
                             cur_coord=torch.stack(cur_coord).unsqueeze(1),
-                            i=torch.tensor(i).unsqueeze(1))
+                            i=torch.tensor(i, device=self.loc.device).unsqueeze(1))
 
         return new_state
-
-    """        
-    @staticmethod
-    def stack_state(loc,nodes_list):
-        ids, first_a, prev_a, visited_, lengths, i = [],[],[],[],[],[]
-        for node in nodes_list:
-            ids.append(node.id)
-            first_a.append(node.first_a)
-            prev_a.append([node.prefix[-1]] if len(node.prefix)>0 else [node.first_a.item()])
-            mask = [0 if i in node.next_actions else 1 for i in range(loc.size(1))]
-            visited_.append([mask])
-            lengths.append(-node.lengths)
-            i.append(node.t)
-
-        prev_a = torch.tensor(prev_a)
-        ids = torch.tensor(ids).unsqueeze(1)
-        new_state = StateTSP(
-                            loc=loc,
-                            dist=(loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1),
-                            ids=ids,
-                            first_a=torch.tensor(first_a).unsqueeze(1),
-                            prev_a=prev_a,
-                            visited_=torch.tensor(visited_, dtype=torch.uint8),
-                            lengths=torch.tensor(lengths).unsqueeze(1),
-                            cur_coord=loc[ids, prev_a],
-                            i=torch.tensor(i).unsqueeze(1))
-
-        return new_state
-    """
 
