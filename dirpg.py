@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import time
 import torch
+from torch.nn import DataParallel
 import heapq
 from utils import utils_gumbel
 from problems.tsp.state_tsp import StateTSP
@@ -285,7 +286,7 @@ class DirPG:
     def __init__(self,
                  model,
                  ):
-
+        model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
         self.decoder = model.decoder
 
