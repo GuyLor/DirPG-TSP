@@ -305,8 +305,8 @@ class DirPG:
         opt_direct = self.sample_t_opt_search_t_direct(state, fixed, inference=False)
         opt, direct = zip(*opt_direct)
 
-        opt_actions = self.stack_trajectories_to_batch(opt)
-        direct_actions = self.stack_trajectories_to_batch(direct)
+        opt_actions = self.stack_trajectories_to_batch(opt, device=batch.device)
+        direct_actions = self.stack_trajectories_to_batch(direct, device=batch.device)
 
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
@@ -385,17 +385,17 @@ class DirPG:
 
         log_p = log_p[:, 0, :]
 
-        #_, selected = utils_gumbel.sample_gumbel_argmax(log_p)
-        selected = torch.argmax(log_p, -1)
+        _, selected = utils_gumbel.sample_gumbel_argmax(log_p)
+        #selected = torch.argmax(log_p, -1)
         state = batch.update(selected, update_length=False)
 
         return log_p, state
 
-    def stack_trajectories_to_batch(self, nodes):
-        return torch.tensor([node.actions for node in nodes]).split(1,1)
+    def stack_trajectories_to_batch(self, nodes, device):
+        return torch.tensor([node.actions for node in nodes], device=device).split(1,1)
 
-    def stack_lengths_to_batch(self, nodes):
-        return torch.tensor([node.length for node in nodes])
+    def stack_lengths_to_batch(self, nodes, device):
+        return torch.tensor([node.length for node in nodes],  device=device)
 
     def run_actions(self, state, actions, batch, fixed):
         outputs = []
