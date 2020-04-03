@@ -89,7 +89,7 @@ class Node:
 
     def bound_length_togo(self):
         # TODO calculate the MST upper bound for TSP
-        return 0
+        return 1000
 
     def get_objective(self):
         """Computes the objective of the trajectory.
@@ -120,7 +120,7 @@ class PriorityQueue:
                  init_state,
                  inference=False,
                  max_search_time=1000,
-                 max_interactions=500,
+                 max_interactions=300,
                  dfs_like=True,
                  ):
         self.queue = []
@@ -139,7 +139,7 @@ class PriorityQueue:
 
         root_node = Node(id=init_state.ids,
                          first_a=init_state.first_a.item(),
-                         next_actions=torch.tensor(not_visited),  # number of cities
+                         next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
                          not_visited=not_visited,
                          prefix=[special_action],
                          lengths=0.0,
@@ -167,6 +167,14 @@ class PriorityQueue:
         self.inference = inference
 
     def pop(self):
+        if not self.queue:
+            print()
+            print('here')
+            print('prune count: ', self.prune_count)
+            print('trajectories_list: ', len(self.trajectories_list))
+            print('num_interactions: ',self.num_interactions)
+            return 'break'
+
         parent = heapq.heappop(self.queue)
         self.current_node = parent
         self.t_opt_objective = self.t_opt.objective if self.t_opt is not None else None
@@ -253,7 +261,6 @@ class PriorityQueue:
 
         assert len(other_actions) == len(self.current_node.next_actions) - 1
         if other_actions and not self.inference:
-
             other_max_location = utils_gumbel.logsumexp(logprobs[other_actions])
             other_max_gumbel = utils_gumbel.sample_truncated_gumbel(self.current_node.logprob_so_far + other_max_location,
                                                                     self.current_node.max_gumbel).item()
@@ -341,7 +348,7 @@ class DirPG:
                 after_stack = time.time()
                 log_p, state = self.forward_and_update(batch_state,fixed)
 
-                log_p = log_p.numpy()
+                #log_p = log_p.numpy()
                 after_model = time.time()
 
                 idx = torch.tensor(range(len(queues)))

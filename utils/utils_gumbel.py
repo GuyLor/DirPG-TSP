@@ -6,15 +6,17 @@ def sample_gumbel(mu):
     """Sample a Gumbel(mu)."""
     return -np.log(np.random.exponential()) + mu
 
-"""
+
 def sample_truncated_gumbel(mu, b):
-    Sample a Gumbel(mu) truncated to be less than b.
+    #Sample a Gumbel(mu) truncated to be less than b.
     m = torch.distributions.exponential.Exponential(torch.ones_like(mu))
     return -torch.log(m.sample() + torch.exp(-b + mu)) + mu
+
 """
 def sample_truncated_gumbel(mu, b):
-    """Sample a Gumbel(mu) truncated to be less than b."""
+    # Sample a Gumbel(mu) truncated to be less than b.
     return -np.log(np.random.exponential() + np.exp(-b + mu)) + mu
+"""
 
 def sample_gumbel_argmax(logits):
     """Sample from a softmax distribution over logits.
@@ -36,14 +38,16 @@ def sample_gumbel_argmax(logits):
 
     return phi_x_g, argmax
 
-"""
+
 def logsumexp(logits):
     c = torch.max(logits)
     return torch.log(torch.sum(torch.exp(logits - c))) + c
+
 """
 def logsumexp(logits):
     c = np.max(logits)
     return np.log(np.sum(np.exp(logits - c))) + c
+"""
 
 def log_softmax(logits, axis=1):
     """Normalize logits per row so that they are logprobs.
