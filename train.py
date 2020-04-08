@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 
 from nets.attention_model_orig import set_decode_type
-from utils.log_utils import log_values
+from utils.log_utils import log_values, log_values_dirpg
 from utils import move_to
 import dirpg
 
@@ -69,8 +69,11 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     step = epoch * (opts.epoch_size // opts.batch_size)
     start_time = time.time()
 
-    if not opts.no_tensorboard:
+    if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger.log_value('learnrate_pg0', optimizer.param_groups[0]['lr'], step)
+
+    if not opts.no_dirpg:
+        tb_logger.add_scalar('learnrate_pg0', optimizer.param_groups[0]['lr'], step)
 
     # Generate new training data for each epoch
     training_dataset = baseline.wrap_dataset(problem.make_dataset(
@@ -78,25 +81,40 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     training_dataloader = DataLoader(training_dataset, batch_size=opts.batch_size, num_workers=1)
 
     # Put model in train mode!
-    model.train()
-    set_decode_type(model, "greedy")
+    if opts.no_dirpg:
+        model.train()
+        set_decode_type(model, "sampling")
+    else:
+        model.encoder.train()
 
     for batch_id, batch in enumerate(tqdm(training_dataloader, disable=opts.no_progress_bar)):
 
-        train_batch(
-            model,
-            optimizer,
-            baseline,
-            epoch,
-            batch_id,
-            step,
-            batch,
-            tb_logger,
-            opts
-        )
+        if opts.no_dirpg:
+            train_batch(
+                model,
+                optimizer,
+                baseline,
+                epoch,
+                batch_id,
+                step,
+                batch,
+                tb_logger,
+                opts
+            )
+        else:
+            train_dirpg_batch(
+                model,
+                optimizer,
+                epoch,
+                batch_id,
+                step,
+                batch,
+                tb_logger,
+                opts,
+
+            )
 
         step += 1
-
 
     epoch_duration = time.time() - start_time
     print("Finished epoch {}, took {} s".format(epoch, time.strftime('%H:%M:%S', time.gmtime(epoch_duration))))
@@ -125,6 +143,36 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     lr_scheduler.step()
 
 
+def train_dirpg_batch(
+                dirpg_trainer,
+                optimizer,
+                epoch,
+                batch_id,
+                step,
+                batch,
+                tb_logger,
+                opts
+):
+
+    x = move_to(batch, opts.device)
+
+    # Evaluate model, get costs and log probabilities
+
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=1.0)
+
+    loss = direct_loss.sum()
+    # Perform backward pass and optimization step
+    optimizer.zero_grad()
+    loss.backward()
+
+    # Clip gradient norms and get (clipped) gradient norms for logging
+    grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
+    optimizer.step()
+
+    # Logging
+    if step % int(opts.log_step) == 0:
+        log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, tb_logger, opts)
+
 def train_batch(
         model,
         optimizer,
@@ -141,56 +189,23 @@ def train_batch(
     bl_val = move_to(bl_val, opts.device) if bl_val is not None else None
 
     # Evaluate model, get costs and log probabilities
+    cost, log_likelihood = model(x, only_encoder=False)
 
-    dp = dirpg.DirPG(model)
-    start_time = time.time()
-    log_p, returns = dp.train_dirpg(x)
-    our_time = time.time() - start_time
-    """
-    for opt,direct in a:
-        print('opt')
-        opt.print()
-        print('direct')
-        direct.print()
-    """
-    start_time = time.time()
-    #cost, log_likelihood = model(x, only_encoder=False)
-    their_time = time.time() - start_time
-    """
-    print()
-    print('our_time:  ', our_time)
-    print('our returns:  ')
-    print(returns[0].view(-1))
-    print('their_time:  ', their_time)
-    print('their cost: ')
-    print(cost)
-    """
     # Evaluate baseline, get baseline loss if any (only for critic)
-    # bl_val, bl_loss = baseline.eval(x, cost) if bl_val is None else (bl_val, 0)
+    bl_val, bl_loss = baseline.eval(x, cost) if bl_val is None else (bl_val, 0)
 
     # Calculate loss
-    # reinforce_loss = ((cost - bl_val) * log_likelihood).mean()
-    # loss = reinforce_loss + bl_loss
-    loss = log_p.sum()
-    print(loss)
+    reinforce_loss = ((cost - bl_val) * log_likelihood).mean()
+    loss = reinforce_loss + bl_loss
+
     # Perform backward pass and optimization step
     optimizer.zero_grad()
     loss.backward()
-
     # Clip gradient norms and get (clipped) gradient norms for logging
     grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
     optimizer.step()
 
     # Logging
-    """
     if step % int(opts.log_step) == 0:
         log_values(cost, grad_norms, epoch, batch_id, step,
                    log_likelihood, reinforce_loss, bl_loss, tb_logger, opts)
-     """
-    if step % int(opts.log_step) == 0:
-        log_values(returns, grad_norms, epoch, batch_id, step,
-                   log_likelihood=torch.zeros(1),
-                   reinforce_loss=torch.zeros(1),
-                   bl_loss=torch.zeros(1),
-                   tb_logger=tb_logger, opts=opts)
-

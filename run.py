@@ -7,6 +7,7 @@ import pprint as pp
 import torch
 import torch.optim as optim
 from tensorboard_logger import Logger as TbLogger
+from torch.utils.tensorboard import SummaryWriter
 
 from nets.critic_network import CriticNetwork
 from options import get_options
@@ -15,6 +16,7 @@ from reinforce_baselines import NoBaseline, ExponentialBaseline, CriticBaseline,
 from nets.attention_model import AttentionModel
 from nets.pointer_network import PointerNetwork, CriticNetworkLSTM
 from utils import torch_load_cpu, load_problem
+import dirpg
 
 
 def run(opts):
@@ -27,8 +29,10 @@ def run(opts):
 
     # Optionally configure tensorboard
     tb_logger = None
-    if not opts.no_tensorboard:
+    if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger = TbLogger(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
+    if not opts.no_dirpg:
+        tb_logger = SummaryWriter(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
 
     os.makedirs(opts.save_dir)
     # Save arguments so exact configuration can always be found
@@ -151,6 +155,7 @@ def run(opts):
         print("Resuming after {}".format(epoch_resume))
         opts.epoch_start = epoch_resume + 1
 
+    model = dirpg.DirPG(model) if not opts.no_dirpg else model
     if opts.eval_only:
         validate(model, val_dataset, opts)
     else:
@@ -164,7 +169,7 @@ def run(opts):
                 val_dataset,
                 problem,
                 tb_logger,
-                opts
+                opts,
             )
 
 

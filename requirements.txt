@@ -1,0 +1,7 @@
+NumPy
+SciPy
+torch
+Christofides
+tqdm
+tensorboard_logger
+Matplotlib

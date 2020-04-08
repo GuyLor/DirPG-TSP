@@ -336,7 +336,6 @@ class AttentionModel(nn.Module):
             return embeddings
 
         _log_p, pi = self._inner(input, embeddings)
-        print(pi)
         cost, mask = self.problem.get_costs(input, pi)
         # Log likelyhood is calculated within the model since returning it per action does not work well with
         # DataParallel since sequences can be of different lengths
@@ -400,7 +399,6 @@ class AttentionModel(nn.Module):
         assert (log_p > -1000).data.all(), "Logprobs should not be -inf, check sampling procedure!"
 
         # Calculate log_likelihood
-        print(log_p.exp())
         return log_p.sum(1)
 
     def _init_embed(self, input):
@@ -432,7 +430,6 @@ class AttentionModel(nn.Module):
         sequences = []
 
         state = self.problem.make_state(input)
-        #print('--------2222222')
         # Compute keys, values for the glimpse and keys for the logits once as they can be reused in every step
         fixed = self.precompute(embeddings)
 
@@ -442,15 +439,9 @@ class AttentionModel(nn.Module):
         i = 0
         while not (state.all_finished()):
 
-            log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
-
-
-
+            log_p, mask = self.decoder(fixed, state)
             prob,mask_ = log_p.exp()[:, 0, :], mask[:, 0, :]
-            #print('%' * 50)
-            #state.print_state()
-            #print(prob)
-            #print('%' * 30)
+
             prob_, mask_ = log_p[:, 0, :], mask[:, 0, :]
             # Select the indices of the next nodes in the sequences, result (batch_size) long
             selected = self._select_node(prob,mask_)  # Squeeze out steps dimension
@@ -497,7 +488,6 @@ class AttentionModel(nn.Module):
                 -1)).data.any(), "Decode greedy: infeasible action has maximum probability"
 
         elif self.decode_type == "sampling":
-            print('*'*100)
             selected = probs.multinomial(1).squeeze(1)
 
             # Check if sampling went OK, can go wrong due to bug on GPU

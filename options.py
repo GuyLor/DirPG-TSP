@@ -10,8 +10,8 @@ def get_options(args=None):
 
     # Data
     parser.add_argument('--problem', default='tsp', help="The problem to solve, default 'tsp'")
-    parser.add_argument('--graph_size', type=int, default=5, help="The size of the problem graph")
-    parser.add_argument('--batch_size', type=int, default=40, help='Number of instances per batch during training')
+    parser.add_argument('--graph_size', type=int, default=20, help="The size of the problem graph")
+    parser.add_argument('--batch_size', type=int, default=100, help='Number of instances per batch during training')
     parser.add_argument('--epoch_size', type=int, default=1280000, help='Number of instances per epoch during training')
     parser.add_argument('--val_size', type=int, default=10000,
                         help='Number of instances used for reporting validation performance')
@@ -29,6 +29,8 @@ def get_options(args=None):
     parser.add_argument('--normalization', default='batch', help="Normalization type, 'batch' (default) or 'instance'")
 
     # Training
+    parser.add_argument('--no_dirpg', action='store_true', help='train with original'
+                                                                ' attention-learn-to-solve-routing-problems')
     parser.add_argument('--lr_model', type=float, default=1e-4, help="Set the learning rate for the actor network")
     parser.add_argument('--lr_critic', type=float, default=1e-4, help="Set the learning rate for the critic network")
     parser.add_argument('--lr_decay', type=float, default=1.0, help='Learning rate decay per epoch')
@@ -74,7 +76,9 @@ def get_options(args=None):
     opts = parser.parse_args(args)
 
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
-    opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
+    r = "RF" if opts.no_dirpg else "DirPG"
+    opts.run_name = "{}_{}_{}".format(opts.run_name, r,  time.strftime("%Y%m%dT%H%M%S"))
+    #opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
     opts.save_dir = os.path.join(
         opts.output_dir,
         "{}_{}".format(opts.problem, opts.graph_size),
