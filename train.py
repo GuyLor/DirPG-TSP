@@ -7,18 +7,17 @@ import math
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 
-from nets.attention_model_orig import set_decode_type
+from nets.attention_model import set_decode_type
 from utils.log_utils import log_values, log_values_dirpg
 from utils import move_to
-import dirpg
 
 def get_inner_model(model):
     return model.module if isinstance(model, DataParallel) else model
 
-
 def validate(model, dataset, opts):
     # Validate
     print('Validating...')
+    model = model.encoder if not opts.no_dirpg else model
     cost = rollout(model, dataset, opts)
     avg_cost = cost.mean()
     print('Validation overall avg_cost: {} +- {}'.format(
@@ -29,12 +28,13 @@ def validate(model, dataset, opts):
 
 def rollout(model, dataset, opts):
     # Put in greedy evaluation mode!
+
     set_decode_type(model, "greedy")
     model.eval()
 
     def eval_model_bat(bat):
         with torch.no_grad():
-            cost, _ = model(move_to(bat, opts.device))
+            cost, _ = model(move_to(bat, opts.device), only_encoder=False)
         return cost.data.cpu()
 
     return torch.cat([
@@ -123,7 +123,7 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
         print('Saving model and state...')
         torch.save(
             {
-                'model': get_inner_model(model).state_dict(),
+                'model': get_inner_model(model if opts.no_dirpg else model.encoder).state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'rng_state': torch.get_rng_state(),
                 'cuda_rng_state': torch.cuda.get_rng_state_all(),
@@ -134,8 +134,10 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
 
     avg_reward = validate(model, val_dataset, opts)
 
-    if not opts.no_tensorboard:
+    if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger.log_value('val_avg_reward', avg_reward, step)
+    elif not opts.no_dirpg:
+        tb_logger.add_scalar('val_avg_reward', avg_reward, step)
 
     baseline.epoch_callback(model, epoch)
 
@@ -158,7 +160,7 @@ def train_dirpg_batch(
 
     # Evaluate model, get costs and log probabilities
 
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=1.0)
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=1.0)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step
