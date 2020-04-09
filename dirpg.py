@@ -3,7 +3,7 @@ import copy
 import time
 import torch
 from torch.nn import DataParallel
-import a_star
+import a_star_sampling
 from utils import utils_gumbel
 from scipy.sparse.csgraph import minimum_spanning_tree
 
@@ -23,7 +23,7 @@ class DirPG:
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
-        a_star.Node.epsilon = epsilon
+        a_star_sampling.Node.epsilon = epsilon
         prune = True
         if self.interactions % 1000 == 1:
             prune = True
@@ -56,11 +56,11 @@ class DirPG:
         batch_size = state.ids.size(0)
         _, state = self.forward_and_update(state, fixed)
 
-        queues = [a_star.PriorityQueue(init_state=state[i],
-                                       distance_mat=state.dist[idx],
-                                       inference=inference,
-                                       max_interactions=self.max_interactions,
-                                       prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
+        queues = [a_star_sampling.PriorityQueue(init_state=state[i],
+                                                distance_mat=state.dist[idx],
+                                                inference=inference,
+                                                max_interactions=self.max_interactions,
+                                                prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
         pop_t, model_t, stack_t, expand_t = [], [], [], []
