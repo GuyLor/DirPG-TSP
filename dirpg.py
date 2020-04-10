@@ -15,7 +15,7 @@ class DirPG:
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
-        self.decoder = model.decoder
+        self.decoder = model.decoder.to('cpu')
 
         self.interactions = 0
         self.max_interactions = max_interactions
@@ -35,7 +35,7 @@ class DirPG:
             self.max_interactions = 3000
 
         opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
-                                                                     fixed,
+                                                                     fixed.to_cpu(),
                                                                      prune=prune,
                                                                      inference=False)
 

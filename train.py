@@ -176,6 +176,10 @@ def train_dirpg_batch(
     if step % int(opts.log_step) == 0:
         log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, tb_logger, opts)
 
+    if opts.use_cuda:
+        torch.cuda.empty_cache()
+
+
 def train_batch(
         model,
         optimizer,
@@ -212,3 +216,6 @@ def train_batch(
     if step % int(opts.log_step) == 0:
         log_values(cost, grad_norms, epoch, batch_id, step,
                    log_likelihood, reinforce_loss, bl_loss, tb_logger, opts)
+
+    if opts.use_cuda:
+        torch.cuda.empty_cache()
