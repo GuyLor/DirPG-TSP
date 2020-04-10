@@ -147,23 +147,23 @@ class StateTSP(NamedTuple):
             print(getattr(self, s))
         print('----------------------------')
 
-    def to_cpu(self):
+    def to(self, device):
         if torch.cuda.is_available():
             return self._replace(
-                loc=self.loc.cpu(),
-                dist=self.dist.cpu(),
-                ids=self.ids.cpu(),
-                first_a=self.first_a.cpu(),
-                prev_a=self.prev_a.cpu(),
-                visited_=self.visited_.cpu(),
-                lengths=self.lengths.cpu(),
-                cur_coord=self.cur_coord.cpu() if self.cur_coord is not None else None,
-                i=self.i.cpu()
+                loc=self.loc.to(device),
+                dist=self.dist.to(device),
+                ids=self.ids.to(device),
+                first_a=self.first_a.to(device),
+                prev_a=self.prev_a.to(device),
+                visited_=self.visited_.to(device),
+                lengths=self.lengths.to(device),
+                cur_coord=self.cur_coord.to(device) if self.cur_coord is not None else None,
+                i=self.i.to(device)
             )
         else:
             return self
 
-    def stack_state(self,nodes_list):
+    def stack_state(self, nodes_list):
         ids, first_a, prev_a, cur_coord, visited_, lengths, i = [],[],[],[],[],[],[]
         for node in nodes_list:
             ids.append(node.id)

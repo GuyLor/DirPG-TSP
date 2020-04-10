@@ -26,8 +26,7 @@ class DirPG:
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
         # a_star_sampling.Node.epsilon = epsilon
-        for i, j in zip(state, fixed):
-            print(type(i), type(j))
+
         prune = True
         #if step % 5 == 1:
         #   self.max_interactions += 100
@@ -36,8 +35,8 @@ class DirPG:
             #self.first_improvement = True
             self.max_interactions = 3000
 
-        opt_direct, interactions = self.sample_t_opt_search_t_direct(state.to_cpu(),
-                                                                     fixed.to_cpu(),
+        opt_direct, interactions = self.sample_t_opt_search_t_direct(state.to('cpu'),
+                                                                     fixed.to('cpu'),
                                                                      prune=prune,
                                                                      inference=False)
 
@@ -160,7 +159,8 @@ class DirPG:
 
     def run_actions(self, state, actions, batch, fixed):
         outputs = []
-
+        state = state.to(batch.device)
+        fixed = fixed.to(batch.device)
         for action in actions:
             log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
             # Select the indices of the next nodes in the sequences, result (batch_size) long
@@ -172,7 +172,7 @@ class DirPG:
             outputs.append(log_p)
 
         # Collected lists, return Tensor
-        a = torch.cat(actions,1)
+        a = torch.cat(actions, 1)
         d = batch.gather(1, a.unsqueeze(-1).expand_as(batch))
 
         lengths = state.lengths + (d[:, 0] - d[:, -1]).norm(p=2, dim=1).unsqueeze(-1)
