@@ -42,13 +42,17 @@ class AttentionModelFixed(NamedTuple):
         return super(AttentionModelFixed, self).__getitem__(key)
 
     def to_cpu(self):
-        return self._replace(
-            node_embeddings=self.node_embeddings.cpu(),
-            context_node_projected=self.context_node_projected.cpu(),
-            glimpse_key=self.glimpse_key.cpu(),  # dim 0 are the heads
-            glimpse_val=self.glimpse_val.cpu(),  # dim 0 are the heads
-            logit_key=self.logit_key.cpu()
-                             )
+        if torch.cuda.is_available():
+            return self._replace(
+                node_embeddings=self.node_embeddings.cpu(),
+                context_node_projected=self.context_node_projected.cpu(),
+                glimpse_key=self.glimpse_key.cpu(),  # dim 0 are the heads
+                glimpse_val=self.glimpse_val.cpu(),  # dim 0 are the heads
+                logit_key=self.logit_key.cpu()
+            )
+        else:
+            return self
+
 
 
 

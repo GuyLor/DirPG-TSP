@@ -26,6 +26,8 @@ class DirPG:
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
         # a_star_sampling.Node.epsilon = epsilon
+        for i, j in zip(state, fixed):
+            print(type(i), type(j))
         prune = True
         #if step % 5 == 1:
         #   self.max_interactions += 100
@@ -34,7 +36,7 @@ class DirPG:
             #self.first_improvement = True
             self.max_interactions = 3000
 
-        opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
+        opt_direct, interactions = self.sample_t_opt_search_t_direct(state.to_cpu(),
                                                                      fixed.to_cpu(),
                                                                      prune=prune,
                                                                      inference=False)
@@ -177,3 +179,6 @@ class DirPG:
         outputs = torch.stack(outputs,1)
 
         return outputs, lengths
+
+
+
