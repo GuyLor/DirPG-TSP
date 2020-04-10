@@ -160,7 +160,7 @@ def train_dirpg_batch(
 
     # Evaluate model, get costs and log probabilities
 
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=1.0)
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=3.0)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step
@@ -168,7 +168,8 @@ def train_dirpg_batch(
     loss.backward()
 
     # Clip gradient norms and get (clipped) gradient norms for logging
-    grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
+    # grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
+    grad_norms = 0
     optimizer.step()
 
     # Logging

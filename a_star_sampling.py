@@ -63,7 +63,7 @@ class Node:
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
         self.upper_bound = self.get_upper_bound(1.0)
-        self.priority = self.get_priority(2.0)
+        self.priority = self.get_priority(1.0)
         self.objective = self.get_objective()
 
 
@@ -94,7 +94,7 @@ class Node:
         """Computes the objective of the trajectory.
         Only used if a node is terminal.
         """
-        return self.lengths  #  self.max_gumbel + self.epsilon * self.lengths
+        return self.lengths  # self.max_gumbel + self.epsilon *
 
     def print(self):
         print(' -----------    Node     -----------')
@@ -123,6 +123,7 @@ class PriorityQueue:
                  inference=False,
                  prune=False,
                  max_interactions=200,
+                 first_improvement=False,
                  dfs_like=False,
                  ):
         self.queue = []
@@ -161,7 +162,7 @@ class PriorityQueue:
         self.prune_count = 0
 
         self.start_search_direct = False
-        self.keep_searching = True
+        self.first_improvement = first_improvement
         self.start_time = float('Inf')
         # self.max_search_time = max_search_time
         self.num_interactions = 0
@@ -215,8 +216,8 @@ class PriorityQueue:
             if t.objective > self.t_direct.objective:
                 self.t_direct = t
                 self.lower_bound = t.objective
-                if not self.keep_searching:
-                    print('*****  priority(direct) > priority(opt)   *****')
+                if self.first_improvement:
+                    #print('*****  priority(direct) > priority(opt)   *****')
                     return 'break'
 
         if self.queue:

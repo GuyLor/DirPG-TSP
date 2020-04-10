@@ -10,7 +10,8 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 class DirPG:
     def __init__(self,
                  model,
-                 max_interactions=200
+                 max_interactions=200,
+                 first_improvement=False
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
@@ -18,16 +19,20 @@ class DirPG:
 
         self.interactions = 0
         self.max_interactions = max_interactions
+        self.first_improvement = first_improvement
 
-    def train_dirpg(self, batch, step, epsilon=1.0):
+    def train_dirpg(self, batch, step, epsilon=10.0):
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
-        a_star_sampling.Node.epsilon = epsilon
+        # a_star_sampling.Node.epsilon = epsilon
         prune = True
-        if self.interactions % 1000 == 1:
-            prune = True
-            self.max_interactions += 100
+        #if step % 5 == 1:
+        #   self.max_interactions += 100
+
+        if False and step > 8:
+            #self.first_improvement = True
+            self.max_interactions = 3000
 
         opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
                                                                      fixed,
@@ -60,6 +65,7 @@ class DirPG:
                                                 distance_mat=state.dist[idx],
                                                 inference=inference,
                                                 max_interactions=self.max_interactions,
+                                                first_improvement=self.first_improvement,
                                                 prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
@@ -75,7 +81,7 @@ class DirPG:
                 parent = queue.pop()
 
                 if parent == 'break':
-                    if queue.id == 0:
+                    if True and queue.id == 0:
                         print('prune_count: ', queue.prune_count)
                         print('trajectories_list: ', len(queue.trajectories_list))
                     interactions.append(queue.num_interactions)
