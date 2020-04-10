@@ -15,7 +15,7 @@ class DirPG:
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
-        self.decoder = model.decoder.to('cpu')
+        self.decoder = model.decoder
 
         self.interactions = 0
         self.max_interactions = max_interactions
@@ -42,6 +42,7 @@ class DirPG:
 
         self.interactions += interactions
         opt, direct = zip(*opt_direct)
+        
         opt_actions, opt_objectives = self.stack_trajectories_to_batch(opt, device=batch.device)
         direct_actions, direct_objectives = self.stack_trajectories_to_batch(direct, device=batch.device)
 
@@ -60,6 +61,7 @@ class DirPG:
         start_encoder = time.time()
 
         batch_size = state.ids.size(0)
+        self.decoder = self.decoder.to('cpu')
         _, state = self.forward_and_update(state, fixed)
 
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
@@ -71,7 +73,6 @@ class DirPG:
 
         batch_t, interactions = [], []
         pop_t, model_t, stack_t, expand_t = [], [], [], []
-
         end_beg = time.time()
         inner_s, inner_o = 0, 0
         while queues:  # batch
@@ -161,6 +162,7 @@ class DirPG:
         outputs = []
         state = state.to(batch.device)
         fixed = fixed.to(batch.device)
+        self.decoder = self.decoder.to(batch.device)
         for action in actions:
             log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
             # Select the indices of the next nodes in the sequences, result (batch_size) long
