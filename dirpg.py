@@ -83,7 +83,7 @@ class DirPG:
                 parent = queue.pop()
 
                 if parent == 'break':
-                    if True and queue.id == 0:
+                    if False and queue.id == 0:
                         print('prune_count: ', queue.prune_count)
                         print('trajectories_list: ', len(queue.trajectories_list))
                     interactions.append(queue.num_interactions)
