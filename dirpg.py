@@ -25,7 +25,7 @@ class DirPG:
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
-        # a_star_sampling.Node.epsilon = epsilon
+        a_star_sampling.Node.epsilon = epsilon
 
         prune = True
         #if step % 5 == 1:
@@ -49,7 +49,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct)/(epsilon+1e-7)
+        direct_loss = (log_p_opt - log_p_direct)/epsilon
 
         return direct_loss, {'opt_cost': opt_length,
                              'direct_cost': direct_length,

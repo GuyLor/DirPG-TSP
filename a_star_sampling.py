@@ -94,7 +94,7 @@ class Node:
         """Computes the objective of the trajectory.
         Only used if a node is terminal.
         """
-        return self.lengths  # self.max_gumbel + self.epsilon *
+        return self.max_gumbel + self.epsilon * self.lengths
 
     def print(self):
         print(' -----------    Node     -----------')

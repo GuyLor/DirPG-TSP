@@ -62,6 +62,7 @@ def get_options(args=None):
     # Misc
     parser.add_argument('--log_step', type=int, default=5, help='Log info every log_step steps')
     parser.add_argument('--log_dir', default='logs', help='Directory to write TensorBoard information to')
+    parser.add_argument('--exp_name', default='experiment', help='directory for comparing different executions')
     parser.add_argument('--run_name', default='run', help='Name to identify the run')
     parser.add_argument('--output_dir', default='outputs', help='Directory to write output models to')
     parser.add_argument('--epoch_start', type=int, default=0,
@@ -76,8 +77,9 @@ def get_options(args=None):
     opts = parser.parse_args(args)
 
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
-    r = "RF" if opts.no_dirpg else "DirPG"
-    opts.run_name = "{}_{}_{}".format(opts.run_name, r,  time.strftime("%Y%m%dT%H%M%S"))
+    r = "REINFORCE" if opts.no_dirpg else "DirPG"
+    opts.run_name = "{}_{}".format(r,  time.strftime("%Y%m%dT%H%M%S"))
+    opts.run_name = os.path.join(opts.exp_name, opts.run_name)
     #opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
     opts.save_dir = os.path.join(
         opts.output_dir,

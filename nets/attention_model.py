@@ -42,18 +42,13 @@ class AttentionModelFixed(NamedTuple):
         return super(AttentionModelFixed, self).__getitem__(key)
 
     def to(self, device):
-        if torch.cuda.is_available():
-            return self._replace(
-                node_embeddings=self.node_embeddings.to(device),
-                context_node_projected=self.context_node_projected.to(device),
-                glimpse_key=self.glimpse_key.to(device),
-                glimpse_val=self.glimpse_val.to(device),
-                logit_key=self.logit_key.to(device)
-            )
-        else:
-            return self
-
-
+        return self._replace(
+            node_embeddings=self.node_embeddings.to(device),
+            context_node_projected=self.context_node_projected.to(device),
+            glimpse_key=self.glimpse_key.to(device),
+            glimpse_val=self.glimpse_val.to(device),
+            logit_key=self.logit_key.to(device)
+        )
 
 
 class Decoder(nn.Module):
