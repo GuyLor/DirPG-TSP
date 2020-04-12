@@ -10,8 +10,8 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 class DirPG:
     def __init__(self,
                  model,
-                 max_interactions=200,
-                 first_improvement=False
+                 max_interactions=600,
+                 first_improvement=True
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
@@ -27,7 +27,7 @@ class DirPG:
         fixed = self.encoder.precompute(embeddings)
         a_star_sampling.Node.epsilon = epsilon
 
-        prune = False
+        prune = True
         #if step % 5 == 1:
         #   self.max_interactions += 100
 
@@ -72,7 +72,7 @@ class DirPG:
                                                 prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
-        candidates = []
+        candidates, prune_count = [], []
         pop_t, model_t, stack_t, expand_t = [], [], [], []
         end_beg = time.time()
         inner_s, inner_o = 0, 0
@@ -86,6 +86,7 @@ class DirPG:
                 if parent == 'break':
 
                     candidates.append(len(queue.trajectories_list))
+                    prune_count.append(queue.prune_count)
                     interactions.append(queue.num_interactions)
                     batch_t.append((queue.t_opt, queue.t_direct))
                     queues.remove(queue)
@@ -129,6 +130,7 @@ class DirPG:
         """
         print('avg interactions: ', np.mean(interactions))
         print('avg candidates: ', np.mean(candidates))
+        print('avg pruned branches: ', np.mean(prune_count))
         return batch_t, np.mean(interactions)
 
     def forward_and_update(self, batch, fixed):
