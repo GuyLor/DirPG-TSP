@@ -72,6 +72,7 @@ class DirPG:
                                                 prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
+        candidates = []
         pop_t, model_t, stack_t, expand_t = [], [], [], []
         end_beg = time.time()
         inner_s, inner_o = 0, 0
@@ -83,9 +84,8 @@ class DirPG:
                 parent = queue.pop()
 
                 if parent == 'break':
-                    if False and queue.id == 0:
-                        print('prune_count: ', queue.prune_count)
-                        print('trajectories_list: ', len(queue.trajectories_list))
+
+                    candidates.append(len(queue.trajectories_list))
                     interactions.append(queue.num_interactions)
                     batch_t.append((queue.t_opt, queue.t_direct))
                     queues.remove(queue)
@@ -127,8 +127,8 @@ class DirPG:
         print('expand oh: ', np.sum(expand_t) - (inner_s+inner_o))
         print('total: ', t + np.sum(pop_t) + np.sum(stack_t) + np.sum(model_t) + np.sum(expand_t))
         """
-        print('len interactions: ', len(interactions))
-        print('mean interactions: ', np.mean(interactions))
+        print('avg interactions: ', np.mean(interactions))
+        print('avg candidates: ', np.mean(candidates))
         return batch_t, np.mean(interactions)
 
     def forward_and_update(self, batch, fixed):
