@@ -21,13 +21,13 @@ class DirPG:
         self.max_interactions = max_interactions
         self.first_improvement = first_improvement
 
-    def train_dirpg(self, batch, step, epsilon=10.0):
+    def train_dirpg(self, batch, step, epsilon=1.0):
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
         a_star_sampling.Node.epsilon = epsilon
 
-        prune = True
+        prune = False
         #if step % 5 == 1:
         #   self.max_interactions += 100
 
@@ -35,8 +35,8 @@ class DirPG:
             #self.first_improvement = True
             self.max_interactions = 3000
 
-        opt_direct, interactions = self.sample_t_opt_search_t_direct(state.to('cpu'),
-                                                                     fixed.to('cpu'),
+        opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
+                                                                     fixed,
                                                                      prune=prune,
                                                                      inference=False)
 
@@ -49,7 +49,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct)/epsilon
+        direct_loss = (log_p_opt - log_p_direct)  # /epsilon
 
         return direct_loss, {'opt_cost': opt_length,
                              'direct_cost': direct_length,
@@ -61,7 +61,7 @@ class DirPG:
         start_encoder = time.time()
 
         batch_size = state.ids.size(0)
-        self.decoder = self.decoder.to('cpu')
+        # self.decoder = self.decoder.to('cpu')
         _, state = self.forward_and_update(state, fixed)
 
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
@@ -160,9 +160,9 @@ class DirPG:
 
     def run_actions(self, state, actions, batch, fixed):
         outputs = []
-        state = state.to(batch.device)
-        fixed = fixed.to(batch.device)
-        self.decoder = self.decoder.to(batch.device)
+        # state = state.to(batch.device)
+        # fixed = fixed.to(batch.device)
+        # self.decoder = self.decoder.to(batch.device)
         for action in actions:
             log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
             # Select the indices of the next nodes in the sequences, result (batch_size) long
