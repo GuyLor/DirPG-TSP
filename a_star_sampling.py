@@ -63,7 +63,7 @@ class Node:
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
         self.upper_bound = self.get_upper_bound(1.0)
-        self.priority = self.get_priority(1.0)
+        self.priority = self.get_priority(2.0)
         self.objective = self.get_objective()
 
 
