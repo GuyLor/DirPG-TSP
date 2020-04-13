@@ -10,8 +10,8 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 class DirPG:
     def __init__(self,
                  model,
-                 max_interactions=600,
-                 first_improvement=True
+                 max_interactions=200,
+                 first_improvement=False
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
@@ -26,7 +26,6 @@ class DirPG:
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
         a_star_sampling.Node.epsilon = epsilon
-
         prune = True
         #if step % 5 == 1:
         #   self.max_interactions += 100
@@ -35,14 +34,16 @@ class DirPG:
             #self.first_improvement = True
             self.max_interactions = 3000
 
-        opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
-                                                                     fixed,
-                                                                     prune=prune,
-                                                                     inference=False)
+        s = time.time()
+        with torch.no_grad():
+            opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
+                                                                         fixed,
+                                                                         prune=prune,
+                                                                         inference=False)
 
         self.interactions += interactions
         opt, direct = zip(*opt_direct)
-        
+
         opt_actions, opt_objectives = self.stack_trajectories_to_batch(opt, device=batch.device)
         direct_actions, direct_objectives = self.stack_trajectories_to_batch(direct, device=batch.device)
 
@@ -134,10 +135,10 @@ class DirPG:
         return batch_t, np.mean(interactions)
 
     def forward_and_update(self, batch, fixed):
-        with torch.no_grad():
-            self.decoder.eval()
 
-            log_p, _ = self.decoder(fixed[:batch.ids.size(0)], batch)
+        self.decoder.eval()
+
+        log_p, _ = self.decoder(fixed[:batch.ids.size(0)], batch)
 
         log_p = log_p[:, 0, :]
 
@@ -157,7 +158,7 @@ class DirPG:
         return torch.tensor(actions, device=device).split(1, 1), np.mean(objectives)
 
     @staticmethod
-    def stack_lengths_to_batch(self, trajectories, device):
+    def stack_lengths_to_batch(trajectories, device):
         return torch.tensor([t.length for t in trajectories],  device=device)
 
     def run_actions(self, state, actions, batch, fixed):

@@ -160,7 +160,7 @@ def train_dirpg_batch(
 
     # Evaluate model, get costs and log probabilities
 
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=1.0)
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=3.0)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step

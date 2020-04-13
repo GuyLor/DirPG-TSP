@@ -1,9 +1,11 @@
 
 import time
 import torch
+import numpy as np
 import heapq
 from utils import utils_gumbel
 from scipy.sparse.csgraph import minimum_spanning_tree
+import prim
 
 class Trajectory:
     def __init__(self, actions, gumbel, length, objective):
@@ -79,16 +81,16 @@ class Node:
             return True
 
     def get_priority(self, alpha=2):
-        return self.max_gumbel + self.epsilon * self.get_upper_bound(alpha)
+        return self.max_gumbel + self.epsilon * (self.lengths + self.bound_length_togo(alpha))
 
     def get_priority_max_gumbel(self):
         return self.max_gumbel
 
     def get_upper_bound(self, alpha=1):
-        return self.lengths + self.bound_length_togo(alpha)
+        return self.max_gumbel + self.epsilon * (self.lengths + self.bound_length_togo(alpha))
 
     def bound_length_togo(self, alpha):
-        return -alpha * minimum_spanning_tree(self.dist).toarray().sum()
+        return -alpha * prim.mst(self.dist.numpy()) if len(self.dist) != 0 else 0
 
     def get_objective(self):
         """Computes the objective of the trajectory.
@@ -233,15 +235,15 @@ class PriorityQueue:
         not_visited = [i for i in self.current_node.not_visited if i != special_action]
         cur_coord = state.loc[self.current_node.id, special_action]
         length = -(cur_coord - self.current_node.cur_coord).norm(p=2, dim=-1)
-        idx = torch.ones(self.current_node.dist.size(-1),
-                         dtype=torch.long,
-                         device=state.loc.device)*special_action
-        dist = self.current_node.dist.scatter(1, idx.unsqueeze(-1), 0).scatter_(0, idx.unsqueeze(0), 0)
+
+        updated_prefix = self.current_node.prefix + [special_action]
+
+        dist = np.delete(np.delete(self.current_node.dist, updated_prefix, 0), updated_prefix, 1)
         special_child = Node(
             id=self.current_node.id,
             first_a=self.current_node.first_a,
             not_visited=not_visited,
-            prefix=self.current_node.prefix + [special_action],
+            prefix=updated_prefix,
             lengths=self.current_node.lengths + length,
             cur_coord=cur_coord,
             done=len(not_visited) == 0,
