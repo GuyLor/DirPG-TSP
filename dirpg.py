@@ -49,7 +49,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct)/epsilon
+        direct_loss = (log_p_opt - log_p_direct) /epsilon
 
         return direct_loss, {'opt_cost': opt_length,
                              'direct_cost': direct_length,

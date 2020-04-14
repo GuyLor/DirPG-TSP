@@ -96,7 +96,7 @@ class Node:
         """Computes the objective of the trajectory.
         Only used if a node is terminal.
         """
-        return self.max_gumbel + self.epsilon * self.lengths
+        return self.lengths  #self.max_gumbel + self.epsilon *
 
     def print(self):
         print(' -----------    Node     -----------')
@@ -126,7 +126,7 @@ class PriorityQueue:
                  prune=False,
                  max_interactions=200,
                  first_improvement=False,
-                 dfs_like=True,
+                 dfs_like=False,
                  ):
         self.queue = []
 
