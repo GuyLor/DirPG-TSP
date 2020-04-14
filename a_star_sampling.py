@@ -81,13 +81,13 @@ class Node:
             return True
 
     def get_priority(self, alpha=2):
-        return self.max_gumbel + self.epsilon * (self.lengths + self.bound_length_togo(alpha))
+        return self.max_gumbel + self.epsilon * self.get_upper_bound(alpha)
 
     def get_priority_max_gumbel(self):
         return self.max_gumbel
 
     def get_upper_bound(self, alpha=1):
-        return self.max_gumbel + self.epsilon * (self.lengths + self.bound_length_togo(alpha))
+        return self.lengths + self.bound_length_togo(alpha)
 
     def bound_length_togo(self, alpha):
         return -alpha * prim.mst(self.dist.numpy()) if len(self.dist) != 0 else 0
@@ -126,7 +126,7 @@ class PriorityQueue:
                  prune=False,
                  max_interactions=200,
                  first_improvement=False,
-                 dfs_like=False,
+                 dfs_like=True,
                  ):
         self.queue = []
 
@@ -211,13 +211,13 @@ class PriorityQueue:
         if node.t_opt:
             self.t_opt = t
             self.t_direct = t
-            self.lower_bound = t.objective
+            self.lower_bound = t.length
             if self.inference:
                 return 'break'
         else:
             if t.objective > self.t_direct.objective:
                 self.t_direct = t
-                self.lower_bound = t.objective
+                self.lower_bound = t.length
                 if self.first_improvement:
                     #print('*****  priority(direct) > priority(opt)   *****')
                     return 'break'

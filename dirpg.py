@@ -29,12 +29,11 @@ class DirPG:
         prune = True
         #if step % 5 == 1:
         #   self.max_interactions += 100
-
-        if False and step > 8:
+        if False and step % 1000 == 0:
             #self.first_improvement = True
-            self.max_interactions = 3000
+            print('increase interactions')
+            self.max_interactions += 100
 
-        s = time.time()
         with torch.no_grad():
             opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
                                                                          fixed,
@@ -50,7 +49,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct)  # /epsilon
+        direct_loss = (log_p_opt - log_p_direct)/epsilon
 
         return direct_loss, {'opt_cost': opt_length,
                              'direct_cost': direct_length,
