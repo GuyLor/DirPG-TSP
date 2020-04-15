@@ -159,8 +159,9 @@ def train_dirpg_batch(
     x = move_to(batch, opts.device)
 
     # Evaluate model, get costs and log probabilities
-
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, step, epsilon=2.0)
+    mi = opts.max_interactions if epoch < 10 else opts.max_interactions*2
+    # eps = opts.epsilon * 0.995**epoch
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, max_interactions=mi, epsilon=opts.epsilon)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step

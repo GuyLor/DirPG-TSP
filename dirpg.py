@@ -10,34 +10,27 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 class DirPG:
     def __init__(self,
                  model,
-                 max_interactions=200,
-                 first_improvement=False
+                 opts
                  ):
         model = model.module if isinstance(model, DataParallel) else model
         self.encoder = model
         self.decoder = model.decoder
 
         self.interactions = 0
-        self.max_interactions = max_interactions
-        self.first_improvement = first_improvement
+        self.max_interactions = opts.max_interactions
+        self.first_improvement = opts.first_improvement
+        self.prune = not opts.not_prune
 
-    def train_dirpg(self, batch, step, epsilon=1.0):
+    def train_dirpg(self, batch, max_interactions, epsilon=1.0):
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
         a_star_sampling.Node.epsilon = epsilon
-        prune = True
-        #if step % 5 == 1:
-        #   self.max_interactions += 100
-        if False and step % 1000 == 0:
-            #self.first_improvement = True
-            print('increase interactions')
-            self.max_interactions += 100
 
         with torch.no_grad():
             opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
                                                                          fixed,
-                                                                         prune=prune,
+                                                                         max_interactions=max_interactions,
                                                                          inference=False)
 
         self.interactions += interactions
@@ -57,7 +50,7 @@ class DirPG:
                              'direct_objective': direct_objectives,
                              'interactions': self.interactions}
 
-    def sample_t_opt_search_t_direct(self, state, fixed, prune=False, inference=False):
+    def sample_t_opt_search_t_direct(self, state, fixed, max_interactions=200, inference=False):
         start_encoder = time.time()
 
         batch_size = state.ids.size(0)
@@ -67,9 +60,9 @@ class DirPG:
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
                                                 distance_mat=state.dist[idx],
                                                 inference=inference,
-                                                max_interactions=self.max_interactions,
+                                                max_interactions=max_interactions,
                                                 first_improvement=self.first_improvement,
-                                                prune=prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
+                                                prune=self.prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
         candidates, prune_count = [], []

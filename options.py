@@ -12,7 +12,7 @@ def get_options(args=None):
     parser.add_argument('--problem', default='tsp', help="The problem to solve, default 'tsp'")
     parser.add_argument('--graph_size', type=int, default=20, help="The size of the problem graph")
     parser.add_argument('--batch_size', type=int, default=200, help='Number of instances per batch during training')
-    parser.add_argument('--epoch_size', type=int, default=25000, help='Number of instances per epoch during training')
+    parser.add_argument('--epoch_size', type=int, default=128000, help='Number of instances per epoch during training')
     parser.add_argument('--val_size', type=int, default=10000,
                         help='Number of instances used for reporting validation performance')
     parser.add_argument('--val_dataset', type=str, default=None, help='Dataset file to use for validation')
@@ -26,7 +26,7 @@ def get_options(args=None):
     parser.add_argument('--tanh_clipping', type=float, default=10.,
                         help='Clip the parameters to within +- this value using tanh. '
                              'Set to 0 to not perform any clipping.')
-    parser.add_argument('--normalization', default='instance', help="Normalization type, 'batch' (default) or 'instance'")
+    parser.add_argument('--normalization', default='batch', help="Normalization type, 'batch' (default) or 'instance'")
 
     # Training
     parser.add_argument('--no_dirpg', action='store_true', help='train with original'
@@ -58,6 +58,14 @@ def get_options(args=None):
                              ' to save memory (default None means no shrinking)')
     parser.add_argument('--data_distribution', type=str, default=None,
                         help='Data distribution to use during training, defaults and options depend on problem.')
+
+    # DirPG
+    parser.add_argument('--max_interactions', type=int, default=200, help='maximum number of env to search t_direct')
+    parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
+    parser.add_argument('--epsilon', type=float, default=2.0, help='epsilon of direct optimization')
+    parser.add_argument('--first_improvement', action='store_true',
+                        help='set t_direct to be the first improvement trajectory')
+
 
     # Misc
     parser.add_argument('--log_step', type=int, default=5, help='Log info every log_step steps')

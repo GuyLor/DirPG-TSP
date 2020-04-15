@@ -155,7 +155,7 @@ def run(opts):
         print("Resuming after {}".format(epoch_resume))
         opts.epoch_start = epoch_resume + 1
 
-    model = dirpg.DirPG(model) if not opts.no_dirpg else model
+    model = dirpg.DirPG(model, opts) if not opts.no_dirpg else model
     if opts.eval_only:
         validate(model, val_dataset, opts)
     else:
