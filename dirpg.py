@@ -120,10 +120,13 @@ class DirPG:
         print('expand other: ', inner_o)
         print('expand oh: ', np.sum(expand_t) - (inner_s+inner_o))
         print('total: ', t + np.sum(pop_t) + np.sum(stack_t) + np.sum(model_t) + np.sum(expand_t))
-        """
+        
+        
         print('avg interactions: ', np.mean(interactions))
         print('avg candidates: ', np.mean(candidates))
         print('avg pruned branches: ', np.mean(prune_count))
+        """
+
         return batch_t, np.mean(interactions)
 
     def forward_and_update(self, batch, fixed):
