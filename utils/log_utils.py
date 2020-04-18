@@ -15,8 +15,8 @@ def log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, writer, opts):
         # writer.add_scalar('cost', {'opt': avg_cost_opt, 'direct': avg_cost_direct}, to_log['interactions'])
 
         writer.add_scalars('cost', {'opt': avg_cost_opt, 'direct': avg_cost_direct}, to_log['interactions'])
-        writer.add_scalar('grad_norm', grad_norms[0], step)
-        writer.add_scalar('grad_norm_clipped', grad_norms_clipped[0], step)
+        writer.add_scalar('grad_norm', grad_norms[0], to_log['interactions'])
+        writer.add_scalar('grad_norm_clipped', grad_norms_clipped[0], to_log['interactions'])
 
 
 def log_values(cost, grad_norms, epoch, batch_id, step,
@@ -36,8 +36,8 @@ def log_values(cost, grad_norms, epoch, batch_id, step,
         tb_logger.log_value('actor_loss', reinforce_loss.item(), step)
         tb_logger.log_value('nll', -log_likelihood.mean().item(), step*opts.graph_size)
 
-        tb_logger.log_value('grad_norm', grad_norms[0], step)
-        tb_logger.log_value('grad_norm_clipped', grad_norms_clipped[0], step)
+        tb_logger.log_value('grad_norm', grad_norms[0], step*opts.graph_size)
+        tb_logger.log_value('grad_norm_clipped', grad_norms_clipped[0], step*opts.graph_size)
 
         if opts.baseline == 'critic':
             tb_logger.log_value('critic_loss', bl_loss.item(), step)

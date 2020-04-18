@@ -5,7 +5,6 @@ import torch
 from torch.nn import DataParallel
 import a_star_sampling
 from utils import utils_gumbel
-from scipy.sparse.csgraph import minimum_spanning_tree
 
 class DirPG:
     def __init__(self,
@@ -19,6 +18,7 @@ class DirPG:
         self.interactions = 0
         self.max_interactions = opts.max_interactions
         self.first_improvement = opts.first_improvement
+        self.dfs_like = opts.dfs_like
         self.prune = not opts.not_prune
 
     def train_dirpg(self, batch, max_interactions, epsilon=1.0):
@@ -42,7 +42,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct) /epsilon
+        direct_loss = (log_p_opt - log_p_direct) / epsilon
 
         return direct_loss, {'opt_cost': opt_length,
                              'direct_cost': direct_length,
@@ -62,6 +62,7 @@ class DirPG:
                                                 inference=inference,
                                                 max_interactions=max_interactions,
                                                 first_improvement=self.first_improvement,
+                                                dfs_like=self.dfs_like,
                                                 prune=self.prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
@@ -77,7 +78,6 @@ class DirPG:
                 parent = queue.pop()
 
                 if parent == 'break':
-
                     candidates.append(len(queue.trajectories_list))
                     prune_count.append(queue.prune_count)
                     interactions.append(queue.num_interactions)

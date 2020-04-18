@@ -62,7 +62,8 @@ def get_options(args=None):
     # DirPG
     parser.add_argument('--max_interactions', type=int, default=200, help='maximum number of env to search t_direct')
     parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
-    parser.add_argument('--epsilon', type=float, default=2.0, help='epsilon of direct optimization')
+    parser.add_argument('--dfs_like', action='store_true', help='search for t_direct in dfs fashion')
+    parser.add_argument('--epsilon', type=float, default=5.0, help='epsilon of direct optimization')
     parser.add_argument('--first_improvement', action='store_true',
                         help='set t_direct to be the first improvement trajectory')
 
@@ -70,7 +71,7 @@ def get_options(args=None):
     # Misc
     parser.add_argument('--log_step', type=int, default=5, help='Log info every log_step steps')
     parser.add_argument('--log_dir', default='logs', help='Directory to write TensorBoard information to')
-    parser.add_argument('--exp_name', default='experiment', help='directory for comparing different executions')
+    parser.add_argument('--exp_name', default='alpha1', help='directory for comparing different executions')
     parser.add_argument('--run_name', default='run', help='Name to identify the run')
     parser.add_argument('--output_dir', default='outputs', help='Directory to write output models to')
     parser.add_argument('--epoch_start', type=int, default=0,

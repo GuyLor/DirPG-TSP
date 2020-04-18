@@ -3,6 +3,7 @@ import time
 from tqdm import tqdm
 import torch
 import math
+import numpy as np
 
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
@@ -157,10 +158,10 @@ def train_dirpg_batch(
 ):
 
     x = move_to(batch, opts.device)
-
     # Evaluate model, get costs and log probabilities
     mi = opts.max_interactions if epoch < 10 else opts.max_interactions*2
-    # eps = opts.epsilon * 0.995**epoch
+    #eps = np.max([opts.epsilon - math.exp(0.05*step), 2.0])
+    #print(eps)
     direct_loss, to_log = dirpg_trainer.train_dirpg(x, max_interactions=mi, epsilon=opts.epsilon)
 
     loss = direct_loss.sum()

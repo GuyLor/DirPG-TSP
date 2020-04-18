@@ -96,7 +96,7 @@ class Node:
         """Computes the objective of the trajectory.
         Only used if a node is terminal.
         """
-        return self.lengths  #self.max_gumbel + self.epsilon *
+        return self.max_gumbel + self.epsilon * self.lengths
 
     def print(self):
         print(' -----------    Node     -----------')
@@ -110,7 +110,7 @@ class Node:
         print(self.dist)
         print('upper bound: ',self.upper_bound)
         print('lengths:  ', self.lengths)
-        print('bound length togo: ', self.bound_length_togo())
+        print('bound length togo: ', self.bound_length_togo(2.0))
         print('done:  ', self.done)
         print('logprob_so_far:  ', self.logprob_so_far)
         print('max_gumbel:  ', self.max_gumbel)
@@ -163,6 +163,7 @@ class PriorityQueue:
 
         self.prune_count = 0
 
+        self.orig_dist = distance_mat
         self.start_search_direct = False
         self.first_improvement = first_improvement
         self.start_time = float('Inf')
@@ -211,13 +212,15 @@ class PriorityQueue:
         if node.t_opt:
             self.t_opt = t
             self.t_direct = t
-            self.lower_bound = t.length
+            self.lower_bound = t.objective
             if self.inference:
                 return 'break'
         else:
             if t.objective > self.t_direct.objective:
+                # if len(self.trajectories_list) > 2:
+                #    print('here: ', len(self.trajectories_list))
                 self.t_direct = t
-                self.lower_bound = t.length
+                self.lower_bound = t.objective
                 if self.first_improvement:
                     #print('*****  priority(direct) > priority(opt)   *****')
                     return 'break'
@@ -238,7 +241,7 @@ class PriorityQueue:
 
         updated_prefix = self.current_node.prefix + [special_action]
 
-        dist = np.delete(np.delete(self.current_node.dist, updated_prefix, 0), updated_prefix, 1)
+        dist = np.delete(np.delete(self.orig_dist, updated_prefix[1:], 0), updated_prefix[1:], 1)
         special_child = Node(
             id=self.current_node.id,
             first_a=self.current_node.first_a,
