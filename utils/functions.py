@@ -77,7 +77,7 @@ def load_args(filename):
 
 
 def load_model(path, epoch=None):
-    from nets.attention_model_orig import AttentionModel
+    from nets.attention_model import AttentionModel
     from nets.pointer_network import PointerNetwork
 
     if os.path.isfile(path):

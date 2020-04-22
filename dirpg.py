@@ -129,15 +129,14 @@ class DirPG:
 
         return batch_t, np.mean(interactions)
 
-    def forward_and_update(self, batch, fixed):
+    def forward_and_update(self, batch, fixed, first_action=None):
 
         self.decoder.eval()
-
         log_p, _ = self.decoder(fixed[:batch.ids.size(0)], batch)
-
         log_p = log_p[:, 0, :]
-
         _, selected = utils_gumbel.sample_gumbel_argmax(log_p)
+        if first_action is not None:
+            selected = torch.ones_like(selected) * first_action
         #selected = torch.argmax(log_p, -1)
         state = batch.update(selected, update_length=False)
 
