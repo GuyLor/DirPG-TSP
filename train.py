@@ -162,7 +162,7 @@ def train_dirpg_batch(
     mi = opts.max_interactions if epoch < 10 else opts.max_interactions*2
     #eps = np.max([opts.epsilon - math.exp(0.05*step), 2.0])
     #print(eps)
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, max_interactions=mi, epsilon=opts.epsilon)
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, max_interactions=opts.max_interactions, epsilon=opts.epsilon)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step

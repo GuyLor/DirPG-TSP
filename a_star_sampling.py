@@ -25,7 +25,7 @@ class Trajectory:
 
 class Node:
     epsilon = 1.0
-
+    alpha = 2.0  # 2: full walk on the MST
     def __init__(self,
                  id,
                  first_a,
@@ -53,7 +53,6 @@ class Node:
 
         self.dist = dist
         self.lengths = lengths
-        self.alpha = 1.0  # 2: full walk on the MST
 
         self.cur_coord = cur_coord
 
@@ -64,8 +63,8 @@ class Node:
 
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
-        self.upper_bound = self.get_upper_bound(1.0)
-        self.priority = self.get_priority(2.0)
+        self.upper_bound = self.get_upper_bound(self.alpha)
+        self.priority = self.get_priority(self.alpha)
         self.objective = self.get_objective()
 
 
@@ -125,6 +124,7 @@ class PriorityQueue:
                  inference=False,
                  prune=False,
                  max_interactions=200,
+                 alpha=1.0,
                  first_improvement=False,
                  dfs_like=False,
                  ):
@@ -142,6 +142,7 @@ class PriorityQueue:
         not_visited = [i for i in range(init_state.loc.size(1)) if i != special_action]
         self.first_coord = init_state.loc[init_state.ids, special_action]
 
+        Node.alpha = alpha
         root_node = Node(id=init_state.ids,
                          first_a=init_state.first_a.item(),
                          next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
@@ -174,6 +175,10 @@ class PriorityQueue:
         self.inference = inference
         self.prune = prune
 
+        self.dfs = 0
+        self.bfs = 0
+        self.others = 0
+
         self.lower_bound = -float('Inf')
 
     def pop(self):
@@ -181,6 +186,15 @@ class PriorityQueue:
             return 'break'
 
         parent = heapq.heappop(self.queue)
+
+        if not parent.t_opt:
+            if parent.prefix == self.current_node.prefix:
+                self.bfs += 1
+            elif parent.prefix[:-1] == self.current_node.prefix:
+                self.dfs += 1
+            else:
+                self.others += 1
+
         self.current_node = parent
 
         if self.num_interactions >= self.max_interactions:

@@ -19,6 +19,7 @@ class DirPG:
         self.max_interactions = opts.max_interactions
         self.first_improvement = opts.first_improvement
         self.dfs_like = opts.dfs_like
+        self.alpha = opts.alpha
         self.prune = not opts.not_prune
 
     def train_dirpg(self, batch, max_interactions, epsilon=1.0):
@@ -28,12 +29,14 @@ class DirPG:
         a_star_sampling.Node.epsilon = epsilon
 
         with torch.no_grad():
-            opt_direct, interactions = self.sample_t_opt_search_t_direct(state,
+            opt_direct, to_log = self.sample_t_opt_search_t_direct(state,
                                                                          fixed,
                                                                          max_interactions=max_interactions,
                                                                          inference=False)
 
-        self.interactions += interactions
+        self.interactions += to_log['interactions']
+        to_log['interactions'] = self.interactions
+
         opt, direct = zip(*opt_direct)
 
         opt_actions, opt_objectives = self.stack_trajectories_to_batch(opt, device=batch.device)
@@ -43,12 +46,12 @@ class DirPG:
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
         direct_loss = (log_p_opt - log_p_direct) / epsilon
-
-        return direct_loss, {'opt_cost': opt_length,
-                             'direct_cost': direct_length,
-                             'opt_objective': opt_objectives,
-                             'direct_objective': direct_objectives,
-                             'interactions': self.interactions}
+        to_log.update({'opt_cost': opt_length,
+                       'direct_cost': direct_length,
+                       'opt_objective': opt_objectives,
+                       'direct_objective': direct_objectives,
+                       'interactions': self.interactions})
+        return direct_loss, to_log
 
     def sample_t_opt_search_t_direct(self, state, fixed, max_interactions=200, inference=False):
         start_encoder = time.time()
@@ -62,11 +65,22 @@ class DirPG:
                                                 inference=inference,
                                                 max_interactions=max_interactions,
                                                 first_improvement=self.first_improvement,
+                                                alpha=self.alpha,
                                                 dfs_like=self.dfs_like,
                                                 prune=self.prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
         candidates, prune_count = [], []
+        bfs, dfs, jumps = [], [], []
+
+        def store_stats(q):
+            candidates.append(len(q.trajectories_list))
+            prune_count.append(q.prune_count)
+            interactions.append(q.num_interactions)
+            bfs.append(q.bfs)
+            dfs.append(q.dfs)
+            jumps.append(q.others)
+
         pop_t, model_t, stack_t, expand_t = [], [], [], []
         end_beg = time.time()
         inner_s, inner_o = 0, 0
@@ -78,10 +92,8 @@ class DirPG:
                 parent = queue.pop()
 
                 if parent == 'break':
-                    candidates.append(len(queue.trajectories_list))
-                    prune_count.append(queue.prune_count)
-                    interactions.append(queue.num_interactions)
                     batch_t.append((queue.t_opt, queue.t_direct))
+                    store_stats(queue)
                     queues.remove(queue)
                     continue
                 else:
@@ -127,7 +139,8 @@ class DirPG:
         print('avg pruned branches: ', np.mean(prune_count))
         """
 
-        return batch_t, np.mean(interactions)
+        return batch_t, {j: np.mean(i) for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
+                                                ['interactions', 'candidates', 'prune_count', 'bfs', 'dfs', 'jumps'])}
 
     def forward_and_update(self, batch, fixed, first_action=None):
 

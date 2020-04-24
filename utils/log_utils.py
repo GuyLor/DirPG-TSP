@@ -18,6 +18,8 @@ def log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, writer, opts):
         writer.add_scalar('grad_norm', grad_norms[0], to_log['interactions'])
         writer.add_scalar('grad_norm_clipped', grad_norms_clipped[0], to_log['interactions'])
 
+        writer.add_scalars('search', {'dfs': to_log['dfs'], 'bfs': to_log['bfs'], 'jumps': to_log['jumps']}, step)
+
 
 def log_values(cost, grad_norms, epoch, batch_id, step,
                log_likelihood, reinforce_loss, bl_loss, tb_logger, opts):
