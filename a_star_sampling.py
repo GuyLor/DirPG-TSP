@@ -173,7 +173,8 @@ class PriorityQueue:
         self.max_interactions = max_interactions
         self.dfs_like = dfs_like
         self.inference = inference
-        self.prune = prune
+        self.prune = False
+        self.p = prune
 
         self.dfs = 0
         self.bfs = 0
@@ -227,6 +228,7 @@ class PriorityQueue:
             self.t_opt = t
             self.t_direct = t
             self.lower_bound = t.objective
+            self.prune = self.p
             if self.inference:
                 return 'break'
         else:

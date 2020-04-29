@@ -8,6 +8,7 @@ import torch
 import torch.optim as optim
 from tensorboard_logger import Logger as TbLogger
 from torch.utils.tensorboard import SummaryWriter
+# from trains import Task
 
 from nets.critic_network import CriticNetwork
 from options import get_options
@@ -32,7 +33,9 @@ def run(opts):
     if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger = TbLogger(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
     if not opts.no_dirpg:
+        #task = Task.init(project_name='DirPG-TSP', task_name=opts.run_name, output_uri='/tmp/blah')
         tb_logger = SummaryWriter(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
+        tb_logger.add_text('Comment', opts.comment,0)
 
     os.makedirs(opts.save_dir)
     # Save arguments so exact configuration can always be found

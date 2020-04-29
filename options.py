@@ -67,12 +67,14 @@ def get_options(args=None):
     parser.add_argument('--alpha', type=float, default=2.0, help='alpha*MST (alpha=2.0 for an upper bound)')
     parser.add_argument('--first_improvement', action='store_true',
                         help='set t_direct to be the first improvement trajectory')
+    parser.add_argument('--comment', type=str, default='default comment',
+                        help='comment for SummerayWriter')
 
 
     # Misc
     parser.add_argument('--log_step', type=int, default=5, help='Log info every log_step steps')
     parser.add_argument('--log_dir', default='logs', help='Directory to write TensorBoard information to')
-    parser.add_argument('--exp_name', default='alpha1', help='directory for comparing different executions')
+    parser.add_argument('--exp_name', default='def_exp', help='directory for comparing different executions')
     parser.add_argument('--run_name', default='run', help='Name to identify the run')
     parser.add_argument('--output_dir', default='outputs', help='Directory to write output models to')
     parser.add_argument('--epoch_start', type=int, default=0,

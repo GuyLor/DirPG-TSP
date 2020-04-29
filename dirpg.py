@@ -30,9 +30,9 @@ class DirPG:
 
         with torch.no_grad():
             opt_direct, to_log = self.sample_t_opt_search_t_direct(state,
-                                                                         fixed,
-                                                                         max_interactions=max_interactions,
-                                                                         inference=False)
+                                                                   fixed,
+                                                                   max_interactions=max_interactions,
+                                                                   inference=False)
 
         self.interactions += to_log['interactions']
         to_log['interactions'] = self.interactions
