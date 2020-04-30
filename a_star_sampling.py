@@ -26,6 +26,8 @@ class Trajectory:
 class Node:
     epsilon = 1.0
     alpha = 2.0  # 2: full walk on the MST
+    dynamic_weighting = True
+    graph_size = 20
     def __init__(self,
                  id,
                  first_a,
@@ -37,6 +39,7 @@ class Node:
                  done=False,
                  logprob_so_far=0,
                  dist=None,
+                 depth=0,
                  max_gumbel=None,
                  t_opt=True,
                  dfs_like=True):  # How much total objective t_opt achieved.
@@ -61,11 +64,18 @@ class Node:
         self.max_gumbel = max_gumbel
         self.next_actions = next_actions
 
+        self.depth = depth
+        if self.dynamic_weighting:
+            self.alpha = 1 + self.alpha*(1-self.t/self.graph_size)
+
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
         self.upper_bound = self.get_upper_bound(self.alpha)
         self.priority = self.get_priority(self.alpha)
         self.objective = self.get_objective()
+
+        ########### Bounded Relaxation ##########
+
 
 
     def __lt__(self, other):
@@ -121,12 +131,8 @@ class PriorityQueue:
     def __init__(self,
                  init_state,
                  distance_mat,
-                 inference=False,
-                 prune=False,
-                 max_interactions=200,
-                 alpha=1.0,
-                 first_improvement=False,
-                 dfs_like=False,
+                 search_params,
+                 inference=False
                  ):
         self.queue = []
 
@@ -142,7 +148,14 @@ class PriorityQueue:
         not_visited = [i for i in range(init_state.loc.size(1)) if i != special_action]
         self.first_coord = init_state.loc[init_state.ids, special_action]
 
-        Node.alpha = alpha
+        ######### global nodes parameters #########
+
+        Node.alpha = search_params['alpha']
+        Node.epsilon = search_params['epsilon']
+        Node.dynamic_weighting = search_params['dynamic_weighting']
+        Node.graph_size = distance_mat.shape[1]
+        ##########################################
+
         root_node = Node(id=init_state.ids,
                          first_a=init_state.first_a.item(),
                          next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
@@ -166,15 +179,17 @@ class PriorityQueue:
 
         self.orig_dist = distance_mat
         self.start_search_direct = False
-        self.first_improvement = first_improvement
+
         self.start_time = float('Inf')
         # self.max_search_time = max_search_time
         self.num_interactions = 0
-        self.max_interactions = max_interactions
-        self.dfs_like = dfs_like
+        self.first_improvement = search_params['first_improvement']
+        self.max_interactions = search_params['max_interactions']
+        self.dfs_like = search_params['dfs_like']
+        self.p = search_params['prune']
+        self.dynamic_weighting = search_params['dynamic_weighting']
         self.inference = inference
         self.prune = False
-        self.p = prune
 
         self.dfs = 0
         self.bfs = 0
@@ -270,6 +285,7 @@ class PriorityQueue:
             max_gumbel=self.current_node.max_gumbel,
             next_actions=not_visited,
             dist=dist,
+            depth= self.current_node.depth + 1,
             t_opt=self.current_node.t_opt,
             dfs_like=self.dfs_like)
 
@@ -302,6 +318,7 @@ class PriorityQueue:
                 max_gumbel=other_max_gumbel,
                 next_actions=other_actions,
                 dist=self.current_node.dist,
+                depth=self.current_node.depth + 1,
                 t_opt=False,
                 dfs_like=False)
 

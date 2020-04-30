@@ -16,23 +16,31 @@ class DirPG:
         self.decoder = model.decoder
 
         self.interactions = 0
+
+        self.search_params = {'max_interactions': opts.max_interactions,
+                              'first_improvement': opts.first_improvement,
+                              'dfs_like': opts.dfs_like,
+                              'alpha': opts.alpha,
+                              'dynamic_weighting': opts.dynamic_weighting,
+                              'prune': not opts.not_prune,
+                              'epsilon': opts.epsilon}
+        """
         self.max_interactions = opts.max_interactions
         self.first_improvement = opts.first_improvement
         self.dfs_like = opts.dfs_like
         self.alpha = opts.alpha
         self.prune = not opts.not_prune
-
+        """
     def train_dirpg(self, batch, max_interactions, epsilon=1.0):
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
-        a_star_sampling.Node.epsilon = epsilon
 
         with torch.no_grad():
             opt_direct, to_log = self.sample_t_opt_search_t_direct(state,
                                                                    fixed,
-                                                                   max_interactions=max_interactions,
-                                                                   inference=False)
+                                                                   max_interactions=max_interactions)
+
 
         self.interactions += to_log['interactions']
         to_log['interactions'] = self.interactions
@@ -63,11 +71,8 @@ class DirPG:
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
                                                 distance_mat=state.dist[idx],
                                                 inference=inference,
-                                                max_interactions=max_interactions,
-                                                first_improvement=self.first_improvement,
-                                                alpha=self.alpha,
-                                                dfs_like=self.dfs_like,
-                                                prune=self.prune) for idx, i in enumerate(torch.tensor(range(batch_size)))]
+                                                search_params=self.search_params)
+                  for idx, i in enumerate(torch.tensor(range(batch_size)))]
 
         batch_t, interactions = [], []
         candidates, prune_count = [], []

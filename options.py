@@ -63,6 +63,7 @@ def get_options(args=None):
     parser.add_argument('--max_interactions', type=int, default=200, help='maximum number of env to search t_direct')
     parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
     parser.add_argument('--dfs_like', action='store_true', help='search for t_direct in dfs fashion')
+    parser.add_argument('--dynamic_weighting', action='store_true', help='dynamic weighting for bounded relaxation')
     parser.add_argument('--epsilon', type=float, default=5.0, help='epsilon of direct optimization')
     parser.add_argument('--alpha', type=float, default=2.0, help='alpha*MST (alpha=2.0 for an upper bound)')
     parser.add_argument('--first_improvement', action='store_true',
