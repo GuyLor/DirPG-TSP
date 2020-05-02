@@ -74,11 +74,8 @@ class Node:
         self.priority = self.get_priority(self.alpha)
         self.objective = self.get_objective()
 
-        ########### Bounded Relaxation ##########
-
-
-
     def __lt__(self, other):
+        # higher-than is implemented here instead of lower-than in order to turn min-heap to max-heap
         if self.t_opt == other.t_opt and not self.dfs_like: #false==false
             return self.priority > other.priority
         elif self.t_opt or self.dfs_like:
@@ -131,6 +128,7 @@ class PriorityQueue:
     def __init__(self,
                  init_state,
                  distance_mat,
+                 epsilon,
                  search_params,
                  inference=False
                  ):
@@ -151,7 +149,7 @@ class PriorityQueue:
         ######### global nodes parameters #########
 
         Node.alpha = search_params['alpha']
-        Node.epsilon = search_params['epsilon']
+        Node.epsilon = epsilon
         Node.dynamic_weighting = search_params['dynamic_weighting']
         Node.graph_size = distance_mat.shape[1]
         ##########################################

@@ -12,6 +12,7 @@ from nets.attention_model import set_decode_type
 from utils.log_utils import log_values, log_values_dirpg
 from utils import move_to
 
+global_avg_reward = 0
 def get_inner_model(model):
     return model.module if isinstance(model, DataParallel) else model
 
@@ -80,7 +81,7 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     training_dataset = baseline.wrap_dataset(problem.make_dataset(
         size=opts.graph_size, num_samples=opts.epoch_size, distribution=opts.data_distribution))
     training_dataloader = DataLoader(training_dataset, batch_size=opts.batch_size, num_workers=1)
-
+    global global_avg_reward
     # Put model in train mode!
     if opts.no_dirpg:
         model.train()
@@ -103,17 +104,29 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
                 opts
             )
         else:
-            train_dirpg_batch(
-                model,
-                optimizer,
-                epoch,
-                batch_id,
-                step,
-                batch,
-                tb_logger,
-                opts,
+            try:
+                train_dirpg_batch(
+                    model,
+                    optimizer,
+                    epoch,
+                    batch_id,
+                    step,
+                    batch,
+                    tb_logger,
+                    opts,
 
-            )
+                )
+            except KeyboardInterrupt:
+
+                tb_logger.add_hparams({'batch size': opts.batch_size,
+                                       'epsilon': opts.epsilon,
+                                       'alpha': opts.alpha,
+                                       'eps anneal factor': opts.annealing,
+                                       'dynamic weighting': opts.dynamic_weighting,
+                                       'max_interactions': opts.max_interactions,
+                                       'not_prune': opts.not_prune,
+                                       'first_improvement': opts.first_improvement},
+                                      {'cost': global_avg_reward})
 
         step += 1
 
@@ -134,12 +147,23 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
         )
 
     avg_reward = validate(model, val_dataset, opts)
+    global_avg_reward = avg_reward
 
     if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger.log_value('val_avg_reward', avg_reward, step)
     elif not opts.no_dirpg:
         tb_logger.add_scalar('val_avg_reward', avg_reward, step)
 
+    if epoch == opts.n_epochs - 1:
+        tb_logger.add_hparams({'batch size': opts.batch_size,
+                               'epsilon': opts.epsilon,
+                               'alpha': opts.alpha,
+                               'eps annealing factor': opts.annealing,
+                               'dynamic weighting': opts.dynamic_weighting,
+                               'max_interactions': opts.max_interactions,
+                               'not_prune': opts.not_prune,
+                               'first_improvement': opts.first_improvement},
+                              {'cost': global_avg_reward})
     baseline.epoch_callback(model, epoch)
 
     # lr_scheduler should be called at end of epoch
@@ -159,10 +183,9 @@ def train_dirpg_batch(
 
     x = move_to(batch, opts.device)
     # Evaluate model, get costs and log probabilities
-    mi = opts.max_interactions if epoch < 10 else opts.max_interactions*2
-    #eps = np.max([opts.epsilon - math.exp(0.05*step), 2.0])
+    eps = np.max([opts.epsilon*math.exp(-opts.annealing * epoch), 2.0])
     #print(eps)
-    direct_loss, to_log = dirpg_trainer.train_dirpg(x, max_interactions=opts.max_interactions, epsilon=opts.epsilon)
+    direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=eps)
 
     loss = direct_loss.sum()
     # Perform backward pass and optimization step

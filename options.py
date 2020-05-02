@@ -11,7 +11,7 @@ def get_options(args=None):
     # Data
     parser.add_argument('--problem', default='tsp', help="The problem to solve, default 'tsp'")
     parser.add_argument('--graph_size', type=int, default=20, help="The size of the problem graph")
-    parser.add_argument('--batch_size', type=int, default=10, help='Number of instances per batch during training')
+    parser.add_argument('--batch_size', type=int, default=20, help='Number of instances per batch during training')
     parser.add_argument('--epoch_size', type=int, default=128000, help='Number of instances per epoch during training')
     parser.add_argument('--val_size', type=int, default=10000,
                         help='Number of instances used for reporting validation performance')
@@ -64,7 +64,8 @@ def get_options(args=None):
     parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
     parser.add_argument('--dfs_like', action='store_true', help='search for t_direct in dfs fashion')
     parser.add_argument('--dynamic_weighting', action='store_true', help='dynamic weighting for bounded relaxation')
-    parser.add_argument('--epsilon', type=float, default=5.0, help='epsilon of direct optimization')
+    parser.add_argument('--epsilon', type=float, default=5.0, help='direct optimization hyper parameter')
+    parser.add_argument('--annealing', type=float, default=0, help='annealing ratio of epsilon')
     parser.add_argument('--alpha', type=float, default=2.0, help='alpha*MST (alpha=2.0 for an upper bound)')
     parser.add_argument('--first_improvement', action='store_true',
                         help='set t_direct to be the first improvement trajectory')

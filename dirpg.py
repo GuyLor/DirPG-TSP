@@ -24,14 +24,8 @@ class DirPG:
                               'dynamic_weighting': opts.dynamic_weighting,
                               'prune': not opts.not_prune,
                               'epsilon': opts.epsilon}
-        """
-        self.max_interactions = opts.max_interactions
-        self.first_improvement = opts.first_improvement
-        self.dfs_like = opts.dfs_like
-        self.alpha = opts.alpha
-        self.prune = not opts.not_prune
-        """
-    def train_dirpg(self, batch, max_interactions, epsilon=1.0):
+
+    def train_dirpg(self, batch, epsilon=1.0):
         embeddings = self.encoder(batch, only_encoder=True)
         state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
@@ -39,8 +33,7 @@ class DirPG:
         with torch.no_grad():
             opt_direct, to_log = self.sample_t_opt_search_t_direct(state,
                                                                    fixed,
-                                                                   max_interactions=max_interactions)
-
+                                                                   epsilon=epsilon)
 
         self.interactions += to_log['interactions']
         to_log['interactions'] = self.interactions
@@ -61,7 +54,7 @@ class DirPG:
                        'interactions': self.interactions})
         return direct_loss, to_log
 
-    def sample_t_opt_search_t_direct(self, state, fixed, max_interactions=200, inference=False):
+    def sample_t_opt_search_t_direct(self, state, fixed, epsilon=2.0, inference=False):
         start_encoder = time.time()
 
         batch_size = state.ids.size(0)
@@ -70,6 +63,7 @@ class DirPG:
 
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
                                                 distance_mat=state.dist[idx],
+                                                epsilon=epsilon,
                                                 inference=inference,
                                                 search_params=self.search_params)
                   for idx, i in enumerate(torch.tensor(range(batch_size)))]
@@ -144,8 +138,9 @@ class DirPG:
         print('avg pruned branches: ', np.mean(prune_count))
         """
 
-        return batch_t, {j: np.mean(i) for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
-                                                ['interactions', 'candidates', 'prune_count', 'bfs', 'dfs', 'jumps'])}
+        return batch_t, {j: np.sum(i)
+                         for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
+                                         ['interactions', 'candidates', 'prune_count', 'bfs', 'dfs', 'jumps'])}
 
     def forward_and_update(self, batch, fixed, first_action=None):
 

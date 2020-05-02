@@ -35,14 +35,6 @@ def run(opts):
     if not opts.no_dirpg:
         #task = Task.init(project_name='DirPG-TSP', task_name=opts.run_name, output_uri='/tmp/blah')
         tb_logger = SummaryWriter(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
-        tb_logger.add_hparams({'batch size': opts.batch_size,
-                               'epsilon': opts.epsilon,
-                               'alpha': opts.alpha,
-                               'dynamic weighting': opts.dynamic_weighting,
-                               'max_interactions': opts.max_interactions,
-                               'not_prune': opts.not_prune,
-                               'first_improvement': opts.first_improvement},
-                              {'cost': 20})
         tb_logger.add_text('Comment', opts.comment,0)
 
     os.makedirs(opts.save_dir)
