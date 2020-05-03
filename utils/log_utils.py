@@ -37,6 +37,7 @@ def log_values(cost, grad_norms, epoch, batch_id, step,
     # Log values to tensorboard
     if not opts.no_tensorboard:
         tb_logger.log_value('cost/interactions', avg_cost, step*opts.graph_size*opts.batch_size)
+        tb_logger.log_value('cost/steps', avg_cost, step)
 
         tb_logger.log_value('actor_loss', reinforce_loss.item(), step)
         tb_logger.log_value('nll', -log_likelihood.mean().item(), step*opts.graph_size)

@@ -154,7 +154,7 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     elif not opts.no_dirpg:
         tb_logger.add_scalar('val_avg_reward', avg_reward, step)
 
-    if epoch == opts.n_epochs - 1:
+    if not opts.no_dirpg and epoch == opts.n_epochs - 1:
         tb_logger.add_hparams({'batch size': opts.batch_size,
                                'epsilon': opts.epsilon,
                                'alpha': opts.alpha,
