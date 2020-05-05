@@ -91,6 +91,7 @@ def get_options(args=None):
     opts = parser.parse_args(args)
 
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
+    print('opts.use_cuda ',torch.cuda.is_available(), opts.use_cuda)
     r = "REINFORCE" if opts.no_dirpg else "DirPG"
     opts.run_name = "{}_{}".format(r,  time.strftime("%Y%m%dT%H%M%S"))
     opts.run_name = os.path.join(opts.exp_name, opts.run_name)
