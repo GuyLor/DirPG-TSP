@@ -63,6 +63,8 @@ def get_options(args=None):
     parser.add_argument('--max_interactions', type=int, default=200, help='maximum number of env to search t_direct')
     parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
     parser.add_argument('--dfs_like', action='store_true', help='search for t_direct in dfs fashion')
+    parser.add_argument('--independent_gumbel', action='store_true', help='run the search with independent gumbel ')
+    parser.add_argument('--heuristic', type=str, default='mst',help='mst or greedy or both')
     parser.add_argument('--dynamic_weighting', action='store_true', help='dynamic weighting for bounded relaxation')
     parser.add_argument('--epsilon', type=float, default=5.0, help='direct optimization hyper parameter')
     parser.add_argument('--annealing', type=float, default=0, help='annealing ratio of epsilon')

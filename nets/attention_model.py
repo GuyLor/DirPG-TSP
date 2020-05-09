@@ -80,8 +80,8 @@ class Decoder(nn.Module):
             self.W_placeholder = nn.Parameter(torch.Tensor(2 * embedding_dim))
             self.W_placeholder.data.uniform_(-1, 1)  # Placeholder should be in range of activations
 
-    def forward(self, fixed, state):
-        log_p, mask = self._get_log_p(fixed, state)
+    def forward(self, fixed, state, normalize=True):
+        log_p, mask = self._get_log_p(fixed, state, normalize)
         return log_p, mask
 
     def _get_log_p(self, fixed, state, normalize=True):
@@ -362,7 +362,7 @@ class AttentionModel(nn.Module):
         embeddings, _ = self.embedder(self._init_embed(input))
         # Use a CachedLookup such that if we repeatedly index this object with the same index we only need to do
         # the lookup once... this is the case if all elements in the batch have maximum batch size
-        return CachedLookup(self._precompute(embeddings))
+        return CachedLookup(self.precompute(embeddings))
 
     def propose_expansions(self, beam, fixed, expand_size=None, normalize=False, max_calc_batch_size=4096):
         # First dim = batch_size * cur_beam_size
@@ -529,7 +529,7 @@ class AttentionModel(nn.Module):
         return AttentionModelFixed(embeddings, fixed_context, *fixed_attention_node_data)
 
     def _get_log_p_topk(self, fixed, state, k=None, normalize=True):
-        log_p, _ = self._get_log_p(fixed, state, normalize=normalize)
+        log_p, _ = self.decoder(fixed, state, normalize=normalize)
 
         # Return topk
         if k is not None and k < log_p.size(-1):

@@ -1,10 +1,12 @@
 
 import time
+import copy
 import torch
 import numpy as np
 import heapq
 from utils import utils_gumbel
-from scipy.sparse.csgraph import minimum_spanning_tree
+import scipy.sparse.csgraph as sc
+# import minimum_spanning_tree
 import prim
 
 class Trajectory:
@@ -28,6 +30,8 @@ class Node:
     alpha = 2.0  # 2: full walk on the MST
     dynamic_weighting = True
     graph_size = 20
+    dist = None
+    heuristic = ''
     def __init__(self,
                  id,
                  first_a,
@@ -38,7 +42,7 @@ class Node:
                  cur_coord=None,
                  done=False,
                  logprob_so_far=0,
-                 dist=None,
+                 upper_bound=None,
                  depth=0,
                  max_gumbel=None,
                  t_opt=True,
@@ -54,7 +58,6 @@ class Node:
         self.prefix = prefix
         self.t = len(self.prefix)
 
-        self.dist = dist
         self.lengths = lengths
 
         self.cur_coord = cur_coord
@@ -70,7 +73,7 @@ class Node:
 
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
-        self.upper_bound = self.get_upper_bound(self.alpha)
+        self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound(self.alpha)
         self.priority = self.get_priority(self.alpha)
         self.objective = self.get_objective()
 
@@ -87,7 +90,7 @@ class Node:
             return True
 
     def get_priority(self, alpha=2):
-        return self.max_gumbel + self.epsilon * self.get_upper_bound(alpha)
+        return self.max_gumbel + self.epsilon * self.upper_bound
 
     def get_priority_max_gumbel(self):
         return self.max_gumbel
@@ -96,7 +99,18 @@ class Node:
         return self.lengths + self.bound_length_togo(alpha)
 
     def bound_length_togo(self, alpha):
-        return -alpha * prim.mst(self.dist.numpy()) if len(self.dist) != 0 else 0
+        if self.heuristic == 'mst':
+            return -alpha * prim.mst(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
+
+        elif self.heuristic == 'greedy':
+            return -alpha * prim.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
+
+        else:  # both
+            assert self.heuristic == 'both'
+            return -alpha*(
+                    0.5*prim.mst(Node.dist.numpy(), self.prefix) +
+                    0.5*prim.greedy_path(Node.dist.numpy(), self.prefix)
+                ) if self.t != Node.graph_size else 0
 
     def get_objective(self):
         """Computes the objective of the trajectory.
@@ -145,13 +159,15 @@ class PriorityQueue:
         special_action = init_state.prev_a.item()
         not_visited = [i for i in range(init_state.loc.size(1)) if i != special_action]
         self.first_coord = init_state.loc[init_state.ids, special_action]
-
-        ######### global nodes parameters #########
-
+        self.graph_size = distance_mat.shape[1]
+        ##########################################
+        #           global nodes parameters      #
         Node.alpha = search_params['alpha']
         Node.epsilon = epsilon
         Node.dynamic_weighting = search_params['dynamic_weighting']
-        Node.graph_size = distance_mat.shape[1]
+        Node.heuristic = search_params['heuristic']
+        Node.graph_size = self.graph_size
+        Node.dist = distance_mat
         ##########################################
 
         root_node = Node(id=init_state.ids,
@@ -159,13 +175,18 @@ class PriorityQueue:
                          next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
                          not_visited=not_visited,
                          prefix=[special_action],
-                         dist=distance_mat,
                          lengths=0.0,
                          cur_coord=self.first_coord,
                          max_gumbel=utils_gumbel.sample_gumbel(0),
                          t_opt=True)
 
         heapq.heappush(self.queue, root_node)
+
+        if search_params['independent_gumbel']:
+            direct_node = copy.copy(root_node)
+            direct_node.t_opt = False
+            heapq.heappush(self.queue, direct_node)
+
         self.current_node = root_node
         self.id = init_state.ids.item()
 
@@ -232,7 +253,7 @@ class PriorityQueue:
 
         t = Trajectory(actions=node.prefix,
                        gumbel=node.max_gumbel,
-                       length=node.lengths - (self.first_coord - node.cur_coord).norm(p=2, dim=-1),
+                       length=node.lengths,
                        objective=node.objective)
 
         self.trajectories_list.append(t)
@@ -267,23 +288,24 @@ class PriorityQueue:
         not_visited = [i for i in self.current_node.not_visited if i != special_action]
         cur_coord = state.loc[self.current_node.id, special_action]
         length = -(cur_coord - self.current_node.cur_coord).norm(p=2, dim=-1)
+        if len(self.current_node.prefix)+1 == self.graph_size:
+            length -= (self.first_coord - cur_coord).norm(p=2, dim=-1)
 
-        updated_prefix = self.current_node.prefix + [special_action]
+        # updated_prefix = self.current_node.prefix + [special_action]
 
-        dist = np.delete(np.delete(self.orig_dist, updated_prefix[1:], 0), updated_prefix[1:], 1)
+        #dist = np.delete(np.delete(self.orig_dist, self.current_node.prefix[1:], 0), self.current_node.prefix[1:], 1)
         special_child = Node(
             id=self.current_node.id,
             first_a=self.current_node.first_a,
             not_visited=not_visited,
-            prefix=updated_prefix,
+            prefix=self.current_node.prefix + [special_action],
             lengths=self.current_node.lengths + length,
             cur_coord=cur_coord,
             done=len(not_visited) == 0,
             logprob_so_far=self.current_node.logprob_so_far + logprobs[special_action],
             max_gumbel=self.current_node.max_gumbel,
             next_actions=not_visited,
-            dist=dist,
-            depth= self.current_node.depth + 1,
+            depth=self.current_node.depth + 1,
             t_opt=self.current_node.t_opt,
             dfs_like=self.dfs_like)
 
@@ -315,7 +337,7 @@ class PriorityQueue:
                 logprob_so_far=self.current_node.logprob_so_far,
                 max_gumbel=other_max_gumbel,
                 next_actions=other_actions,
-                dist=self.current_node.dist,
+                upper_bound=self.current_node.upper_bound,
                 depth=self.current_node.depth + 1,
                 t_opt=False,
                 dfs_like=False)

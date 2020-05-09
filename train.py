@@ -121,6 +121,8 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
                 tb_logger.add_hparams({'batch size': opts.batch_size,
                                        'epsilon': opts.epsilon,
                                        'alpha': opts.alpha,
+                                       'independent_gumbel': opts.independent_gumbel,
+                                       'heuristic': opts.heuristic,
                                        'eps anneal factor': opts.annealing,
                                        'dynamic weighting': opts.dynamic_weighting,
                                        'max_interactions': opts.max_interactions,
@@ -158,8 +160,10 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
         tb_logger.add_hparams({'batch size': opts.batch_size,
                                'epsilon': opts.epsilon,
                                'alpha': opts.alpha,
+                               'independent_gumbel': opts.independent_gumbel,
+                               'heuristic': opts.heuristic,
                                'eps annealing factor': opts.annealing,
-                               'dynamic weighting': opts.dynamic_weighting,
+                               'dynamic weighting': opts.dynam0ic_weighting,
                                'max_interactions': opts.max_interactions,
                                'not_prune': opts.not_prune,
                                'first_improvement': opts.first_improvement},
@@ -183,19 +187,20 @@ def train_dirpg_batch(
 
     x = move_to(batch, opts.device)
     # Evaluate model, get costs and log probabilities
-    eps = np.max([opts.epsilon*math.exp(-opts.annealing * epoch), 2.0])
+    # dirpg_trainer.search_params['alpha'] = np.min([opts.alpha*math.exp(0.002 * step), 4.0])
+    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), 1.0])
     #print(eps)
     direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=eps)
-
-    loss = direct_loss.sum()
-    # Perform backward pass and optimization step
-    optimizer.zero_grad()
-    loss.backward()
-
-    # Clip gradient norms and get (clipped) gradient norms for logging
-    grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
-    #grad_norms = 0
-    optimizer.step()
+    if direct_loss is not None:
+        loss = direct_loss.sum()
+        # Perform backward pass and optimization step
+        optimizer.zero_grad()
+        loss.backward()
+        # Clip gradient norms and get (clipped) gradient norms for logging
+        grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
+        optimizer.step()
+    else:
+        grad_norms = [0], [0]
 
     # Logging
     if step % int(opts.log_step) == 0:
