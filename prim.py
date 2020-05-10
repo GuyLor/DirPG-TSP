@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 
-def _mst(distance_matrix, not_visited):
+
+def mst(distance_matrix, not_visited):
     """Determine the minimum spanning tree for a set of points represented
     :  by their inter-point distances... ie their 'W'eights
     :Requires:
@@ -19,30 +20,30 @@ def _mst(distance_matrix, not_visited):
         torch.index_select(distance_matrix, 0, not_visited),
         1, not_visited)
 
-    Np = dm.shape[0]
+    n_vertices = dm.shape[0]
     pairs = []
-    pnts_seen = [0]  # Add the first point                    
-    n_seen = 1
+    visited_vertices = [0]  # Add the first point
+    num_visited = 1
     # exclude self connections by assigning inf to the diagonal
     dm.fill_diagonal_(np.inf)
-    # 
+    #
     mst_val = 0
-    while n_seen != Np:                                     
-        new_edge = torch.argmin(dm[pnts_seen], dim=0)
-        mst_val += dm[pnts_seen].reshape(-1)[new_edge]
+    while num_visited != n_vertices:
+        new_edge = torch.argmin(dm[visited_vertices])
+        mst_val += dm[visited_vertices].view(-1)[new_edge]
 
-        new_edge = divmod(new_edge, Np)
-
-        new_edge = [pnts_seen[new_edge[0]], new_edge[1]]
+        new_edge = divmod(new_edge.item(), n_vertices)
+        new_edge = [visited_vertices[new_edge[0]], new_edge[1]]
         pairs.append(new_edge)
-        pnts_seen.append(new_edge[1])
-        dm[pnts_seen, new_edge[1]] = np.inf
-        dm[new_edge[1], pnts_seen] = np.inf
-        n_seen += 1
+        visited_vertices.append(new_edge[1])
+        dm[visited_vertices, new_edge[1]] = np.inf
+        dm[new_edge[1], visited_vertices] = np.inf
+        num_visited += 1
     return mst_val
 
 
-def mst(distance_matrix, prefix):
+
+def mst_np(distance_matrix, prefix):
     """
     Determine the minimum spanning tree for a set of points represented
     :  by their inter-point distances... ie their 'W'eights

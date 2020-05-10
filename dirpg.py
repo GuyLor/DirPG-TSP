@@ -133,7 +133,7 @@ class DirPG:
                 expand_t.append(after_expand - after_model)
 
         t = end_beg - start_encoder
-        """
+
         print('---------- our time detailed  -------')
         print('encoder: ', t)
         print('pop: ', np.sum(pop_t))
@@ -149,7 +149,7 @@ class DirPG:
         print('avg candidates: ', np.mean(candidates))
         print('avg pruned branches: ', np.mean(prune_count))
 
-        """
+
         return batch_t, {j: np.sum(i)
                          for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
                                          ['interactions', 'candidates', 'prune_count', 'bfs', 'dfs', 'jumps'])}

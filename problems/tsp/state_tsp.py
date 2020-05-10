@@ -89,12 +89,10 @@ class StateTSP(NamedTuple):
         # Update should only be called with just 1 parallel step, in which case we can check this way if we should update
 
         first_a = prev_a if self.i[0].item() == 0 else self.first_a
-        #first_a = self.first_a
         if self.visited_.dtype == torch.uint8:
             # Add one dimension since we write a single value
             visited_ = self.visited_.scatter(-1, prev_a[:, :, None], 1)
         else:
-
             visited_ = mask_long_scatter(self.visited_, prev_a)
 
         return self._replace(first_a=first_a, prev_a=prev_a, visited_=visited_,
@@ -162,11 +160,11 @@ class StateTSP(NamedTuple):
 
 
     def stack_state(self, nodes_list):
-        ids, first_a, prev_a, cur_coord, visited_, lengths, i = [],[],[],[],[],[],[]
+        ids, first_a, prev_a, cur_coord, visited_, lengths, i = [], [], [], [], [], [], []
         for node in nodes_list:
             ids.append(node.id)
             first_a.append(node.first_a)
-            prev_a.append([node.prefix[-1]] if len(node.prefix)>0 else [node.first_a])
+            prev_a.append([node.prefix[-1]] if len(node.prefix) > 0 else [node.first_a])
             mask = [0 if i in node.next_actions else 1 for i in range(self.loc.size(1))]
             visited_.append([mask])
             lengths.append(-node.lengths)
@@ -175,7 +173,6 @@ class StateTSP(NamedTuple):
 
         prev_a = torch.tensor(prev_a, device=self.loc.device)
         ids = torch.tensor(ids, device=self.loc.device).unsqueeze(1)
-        #cur_coord = self.loc[ids, prev_a] if
 
         new_state = self._replace(
                             ids=ids,

@@ -73,8 +73,8 @@ class Node:
 
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
-        self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound(self.alpha)
-        self.priority = self.get_priority(self.alpha)
+        self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound()
+        self.priority = self.get_priority()
         self.objective = self.get_objective()
 
     def __lt__(self, other):
@@ -95,20 +95,21 @@ class Node:
     def get_priority_max_gumbel(self):
         return self.max_gumbel
 
-    def get_upper_bound(self, alpha=1):
-        return self.lengths + self.bound_length_togo(alpha)
+    def get_upper_bound(self):
+        return self.lengths + self.bound_length_togo()
 
-    def bound_length_togo(self, alpha):
+    def bound_length_togo(self):
         if self.heuristic == 'mst':
-            return -alpha * prim.mst(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
+            return -self.alpha * prim.mst(Node.dist, torch.tensor(self.not_visited+[self.first_a]))\
+                if self.t != Node.graph_size else 0
 
         elif self.heuristic == 'greedy':
-            return -alpha * prim.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
+            return -self.alpha * prim.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
 
         else:  # both
             assert self.heuristic == 'both'
-            return -alpha*(
-                    0.5*prim.mst(Node.dist.numpy(), self.prefix) +
+            return -self.alpha*(
+                    0.5*prim.mst(Node.dist,  torch.tensor(self.not_visited+[self.first_a])) +
                     0.5*prim.greedy_path(Node.dist.numpy(), self.prefix)
                 ) if self.t != Node.graph_size else 0
 
