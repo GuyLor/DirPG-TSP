@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 
-def mst(distance_matrix, not_visited):
+def prim_pytorch(distance_matrix, not_visited):
     """Determine the minimum spanning tree for a set of points represented
     :  by their inter-point distances... ie their 'W'eights
     :Requires:
@@ -43,7 +43,7 @@ def mst(distance_matrix, not_visited):
 
 
 
-def mst_np(distance_matrix, prefix):
+def prim_np(distance_matrix, prefix):
     """
     Determine the minimum spanning tree for a set of points represented
     :  by their inter-point distances... ie their 'W'eights
@@ -60,7 +60,8 @@ def mst_np(distance_matrix, prefix):
 
     if W.shape[0] != W.shape[1]:
         raise ValueError("W needs to be square matrix of edge weights")
-    W = np.delete(np.delete(W, prefix[1:], 0), prefix[1:], 1)
+    if len(prefix)>1:
+        W = np.delete(np.delete(W, prefix[1:], 0), prefix[1:], 1)
     Np = W.shape[0]
     pairs = []
     pnts_seen = [0]  # Add the first point                    

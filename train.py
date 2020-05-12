@@ -12,6 +12,8 @@ from nets.attention_model import set_decode_type
 from utils.log_utils import log_values, log_values_dirpg
 from utils import move_to
 
+from datetime import datetime, timedelta
+
 global_avg_reward = 0
 def get_inner_model(model):
     return model.module if isinstance(model, DataParallel) else model
@@ -163,7 +165,7 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
                                'independent_gumbel': opts.independent_gumbel,
                                'heuristic': opts.heuristic,
                                'eps annealing factor': opts.annealing,
-                               'dynamic weighting': opts.dynam0ic_weighting,
+                               'dynamic weighting': opts.dynamic_weighting,
                                'max_interactions': opts.max_interactions,
                                'not_prune': opts.not_prune,
                                'first_improvement': opts.first_improvement},
@@ -173,7 +175,15 @@ def train_epoch(model, optimizer, baseline, lr_scheduler, epoch, val_dataset, pr
     # lr_scheduler should be called at end of epoch
     lr_scheduler.step()
 
+def GetTime(sec):
+    sec = timedelta(seconds=int(sec))
+    d = datetime(1,1,1) + sec
 
+    print("DAYS:HOURS:MIN:SEC")
+    print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
+
+
+sum_batch_time = 0
 def train_dirpg_batch(
                 dirpg_trainer,
                 optimizer,
@@ -185,10 +195,11 @@ def train_dirpg_batch(
                 opts
 ):
 
+    start_time = time.time()
     x = move_to(batch, opts.device)
     # Evaluate model, get costs and log probabilities
     # dirpg_trainer.search_params['alpha'] = np.min([opts.alpha*math.exp(0.002 * step), 4.0])
-    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), 1.0])
+    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), 2.0])
     #print(eps)
     direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=eps)
     if direct_loss is not None:
@@ -206,8 +217,19 @@ def train_dirpg_batch(
     if step % int(opts.log_step) == 0:
         log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, tb_logger, opts)
 
+        global sum_batch_time
+
+        sum_batch_time += (time.time() - start_time)
+        avg_batch_time = sum_batch_time/step if step > 0 else sum_batch_time
+        print('batch time: ',avg_batch_time)
+        seconds = (opts.n_epochs*(opts.epoch_size // opts.batch_size) - step) * avg_batch_time
+        print('estimated time to finish')
+        GetTime(seconds)
+
     if opts.use_cuda:
         torch.cuda.empty_cache()
+
+
 
 
 def train_batch(

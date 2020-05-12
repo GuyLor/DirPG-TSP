@@ -38,32 +38,23 @@ class DirPG:
                                                                    epsilon=epsilon)
 
         self.interactions += to_log['interactions']
-        to_log['interactions'] = self.interactions
 
         opt, direct = zip(*opt_direct)
 
-        trajs = self.stack_trajectories_to_batch(opt, direct,  device=batch.device)
-        if trajs[1] is not None:
-            opt_actions, opt_objectives = trajs[0]
-            direct_actions, direct_objectives = trajs[1]
+        opt, direct = self.stack_trajectories_to_batch(opt, direct,  device=batch.device)
 
-            log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
-            log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
+        opt_actions, opt_objectives = opt
+        direct_actions, direct_objectives = direct
 
-            direct_loss = (log_p_opt - log_p_direct) / epsilon
-            to_log.update({'opt_cost': opt_length,
-                           'direct_cost': direct_length,
-                           'opt_objective': opt_objectives,
-                           'direct_objective': direct_objectives,
-                           'interactions': self.interactions})
+        log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
+        log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        else:  # opt == direct and there's no reason for update
-            direct_loss = None
-            to_log.update({'opt_cost': trajs[0][0],
-                           'direct_cost': trajs[0][0],
-                           'opt_objective': trajs[0][1],
-                           'direct_objective': trajs[0][1],
-                           'interactions': self.interactions})
+        direct_loss = (log_p_opt - log_p_direct) / epsilon
+        to_log.update({'opt_cost': opt_length,
+                       'direct_cost': direct_length,
+                       'opt_objective': opt_objectives,
+                       'direct_objective': direct_objectives,
+                       'interactions': self.interactions})
 
         return direct_loss, to_log
 
@@ -98,8 +89,8 @@ class DirPG:
         inner_s, inner_o = 0, 0
         while queues:  # batch
             start = time.time()
-            nodes = []
-            copy_queues = copy.copy(queues)
+            parents = []
+            copy_queues = copy.copy(queues) # TODO remove copy
             for queue in copy_queues:
                 parent = queue.pop()
 
@@ -109,11 +100,11 @@ class DirPG:
                     queues.remove(queue)
                     continue
                 else:
-                    nodes.append(parent)
+                    parents.append(parent)
             after_pop = time.time()
 
-            if len(nodes) > 0:
-                batch_state = state.stack_state(nodes)
+            if len(parents) > 0:
+                batch_state = state.stack_state(parents)
                 after_stack = time.time()
                 log_p, state = self.forward_and_update(batch_state, fixed)
 
@@ -133,7 +124,7 @@ class DirPG:
                 expand_t.append(after_expand - after_model)
 
         t = end_beg - start_encoder
-
+        """
         print('---------- our time detailed  -------')
         print('encoder: ', t)
         print('pop: ', np.sum(pop_t))
@@ -148,9 +139,9 @@ class DirPG:
         print('avg interactions: ', np.mean(interactions))
         print('avg candidates: ', np.mean(candidates))
         print('avg pruned branches: ', np.mean(prune_count))
+        """
 
-
-        return batch_t, {j: np.sum(i)
+        return batch_t, {j: np.sum(i) if j == 'interactions' else np.mean(i)
                          for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
                                          ['interactions', 'candidates', 'prune_count', 'bfs', 'dfs', 'jumps'])}
 
@@ -173,24 +164,17 @@ class DirPG:
         actions_direct, objectives_direct = [], []
         only_opt, only_opt_obj = [], []
         for t_o, t_d in zip(opt_traj, direct_traj):
-            if t_o.actions != t_d.actions:
-                actions_opt.append(t_o.actions)
-                objectives_opt.append(t_o.objective)
+            actions_opt.append(t_o.actions)
+            objectives_opt.append(t_o.objective)
 
-                actions_direct.append(t_d.actions)
-                objectives_direct.append(t_d.objective)
+            actions_direct.append(t_d.actions)
+            objectives_direct.append(t_d.objective)
 
-            else:
-                only_opt.append(-t_o.length)
-                only_opt_obj.append(t_o.objective)
-
-        if actions_opt:
-            opt = torch.tensor(actions_opt, device=device).split(1, 1), np.mean(objectives_opt)
-            direct = torch.tensor(actions_direct, device=device).split(1, 1), np.mean(objectives_direct)
-            return opt, direct
-
-        else:
-            return (torch.tensor(only_opt, device=device), np.mean(only_opt_obj)), None
+        opt = torch.tensor(actions_opt, device=device).split(1, 1),\
+              torch.tensor(objectives_opt, device=device).mean()
+        direct = torch.tensor(actions_direct, device=device).split(1, 1),\
+                 torch.tensor(objectives_direct, device=device).mean()
+        return opt, direct
 
 
     @staticmethod

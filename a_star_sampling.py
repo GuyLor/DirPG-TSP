@@ -7,7 +7,7 @@ import heapq
 from utils import utils_gumbel
 import scipy.sparse.csgraph as sc
 # import minimum_spanning_tree
-import prim
+import mst
 
 class Trajectory:
     def __init__(self, actions, gumbel, length, objective):
@@ -73,7 +73,8 @@ class Node:
 
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
-        self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound()
+        #self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound()
+        self.upper_bound = upper_bound if upper_bound is not None else self.bound_length_togo()
         self.priority = self.get_priority()
         self.objective = self.get_objective()
 
@@ -90,7 +91,7 @@ class Node:
             return True
 
     def get_priority(self, alpha=2):
-        return self.max_gumbel + self.epsilon * self.upper_bound
+        return self.max_gumbel + self.epsilon * (self.upper_bound - self.lengths)
 
     def get_priority_max_gumbel(self):
         return self.max_gumbel
@@ -100,17 +101,17 @@ class Node:
 
     def bound_length_togo(self):
         if self.heuristic == 'mst':
-            return -self.alpha * prim.mst(Node.dist, torch.tensor(self.not_visited+[self.first_a]))\
-                if self.t != Node.graph_size else 0
+            return -self.alpha * mst.prim_np(Node.dist.numpy(), self.prefix)\
+                if self.t != Node.graph_size else 0  # self.not_visited+[self.first_a]
 
         elif self.heuristic == 'greedy':
-            return -self.alpha * prim.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
+            return -self.alpha * mst.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
 
         else:  # both
             assert self.heuristic == 'both'
             return -self.alpha*(
-                    0.5*prim.mst(Node.dist,  torch.tensor(self.not_visited+[self.first_a])) +
-                    0.5*prim.greedy_path(Node.dist.numpy(), self.prefix)
+                    0.5 * mst.prim_pytorch(Node.dist, torch.tensor(self.not_visited + [self.first_a])) +
+                    0.5 * mst.greedy_path(Node.dist.numpy(), self.prefix)
                 ) if self.t != Node.graph_size else 0
 
     def get_objective(self):
@@ -157,7 +158,7 @@ class PriorityQueue:
                                          ids=init_state.ids.squeeze(0),
                                          i=init_state.i.squeeze(0))
 
-        special_action = init_state.prev_a.item()
+        special_action = init_state.prev_a
         not_visited = [i for i in range(init_state.loc.size(1)) if i != special_action]
         self.first_coord = init_state.loc[init_state.ids, special_action]
         self.graph_size = distance_mat.shape[1]
@@ -172,7 +173,7 @@ class PriorityQueue:
         ##########################################
 
         root_node = Node(id=init_state.ids,
-                         first_a=init_state.first_a.item(),
+                         first_a=init_state.first_a,
                          next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
                          not_visited=not_visited,
                          prefix=[special_action],
@@ -306,6 +307,7 @@ class PriorityQueue:
             logprob_so_far=self.current_node.logprob_so_far + logprobs[special_action],
             max_gumbel=self.current_node.max_gumbel,
             next_actions=not_visited,
+            upper_bound=self.current_node.upper_bound,
             depth=self.current_node.depth + 1,
             t_opt=self.current_node.t_opt,
             dfs_like=self.dfs_like)
