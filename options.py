@@ -67,6 +67,7 @@ def get_options(args=None):
     parser.add_argument('--heuristic', type=str, default='mst',help='mst or greedy or both')
     parser.add_argument('--dynamic_weighting', action='store_true', help='dynamic weighting for bounded relaxation')
     parser.add_argument('--epsilon', type=float, default=5.0, help='direct optimization hyper parameter')
+    parser.add_argument('--min_eps', type=float, default=2.0, help='direct optimization hyper parameter')
     parser.add_argument('--annealing', type=float, default=0, help='annealing ratio of epsilon')
     parser.add_argument('--alpha', type=float, default=2.0, help='alpha*MST (alpha=2.0 for an upper bound)')
     parser.add_argument('--first_improvement', action='store_true',

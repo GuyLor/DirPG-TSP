@@ -179,8 +179,8 @@ def GetTime(sec):
     sec = timedelta(seconds=int(sec))
     d = datetime(1,1,1) + sec
 
-    print("DAYS:HOURS:MIN:SEC")
-    print("%d:%d:%d:%d" % (d.day-1, d.hour, d.minute, d.second))
+    print("ETA (D:H:M)", end=" ")
+    print("%d:%d:%d" % (d.day-1, d.hour, d.minute))
 
 
 sum_batch_time = 0
@@ -199,8 +199,7 @@ def train_dirpg_batch(
     x = move_to(batch, opts.device)
     # Evaluate model, get costs and log probabilities
     # dirpg_trainer.search_params['alpha'] = np.min([opts.alpha*math.exp(0.002 * step), 4.0])
-    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), 2.0])
-    #print(eps)
+    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), opts.min_eps])
     direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=eps)
     if direct_loss is not None:
         loss = direct_loss.sum()
@@ -214,17 +213,17 @@ def train_dirpg_batch(
         grad_norms = [0], [0]
 
     # Logging
+    global sum_batch_time
+    sum_batch_time += (time.time() - start_time)
     if step % int(opts.log_step) == 0:
         log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, tb_logger, opts)
 
-        global sum_batch_time
 
-        sum_batch_time += (time.time() - start_time)
         avg_batch_time = sum_batch_time/step if step > 0 else sum_batch_time
         print('batch time: ',avg_batch_time)
         seconds = (opts.n_epochs*(opts.epoch_size // opts.batch_size) - step) * avg_batch_time
-        print('estimated time to finish')
         GetTime(seconds)
+        print('============================')
 
     if opts.use_cuda:
         torch.cuda.empty_cache()

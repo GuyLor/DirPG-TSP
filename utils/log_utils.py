@@ -6,12 +6,12 @@ def log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, writer, opts):
     # Log values to screen
     print('epoch: {}, train_batch_id: {}'.format(epoch, batch_id))
     print('avg_cost opt: {:.4f}, avg_cost direct: {:.4f}'.format(avg_cost_opt, avg_cost_direct))
-    print('candidates: {}'.format(to_log['candidates']))
+    print('candidates: {}  prune_count: {}'.format(to_log['candidates'], to_log['prune_count']))
     print('grad_norm: {:.4f}, clipped: {}'.format(grad_norms[0], grad_norms_clipped[0]))
 
     # Log values to tensorboard
     if not opts.no_tensorboard:
-        print('============================')
+
         # writer.add_scalar('cost', {'opt': avg_cost_opt, 'direct': avg_cost_direct}, to_log['interactions'])
         # writer.add_scalar('cost', {'opt': avg_cost_opt, 'direct': avg_cost_direct}, to_log['interactions'])
 

@@ -42,7 +42,7 @@ class Node:
                  cur_coord=None,
                  done=False,
                  logprob_so_far=0,
-                 upper_bound=None,
+                 alpha_mst=None,
                  depth=0,
                  max_gumbel=None,
                  t_opt=True,
@@ -74,9 +74,13 @@ class Node:
         self.t_opt = t_opt  # true: opt, false: direct
         self.dfs_like = dfs_like
         #self.upper_bound = upper_bound if upper_bound is not None else self.get_upper_bound()
-        self.upper_bound = upper_bound if upper_bound is not None else self.bound_length_togo()
-        self.priority = self.get_priority()
+
+        self.alpha_mst = alpha_mst if alpha_mst is not None else self.bound_length_togo()
+        self.priority = self.get_priority().item()
+
+        self.upper_bound = self.priority
         self.objective = self.get_objective()
+        self.eps_reward = self.epsilon * (self.upper_bound - self.lengths)
 
     def __lt__(self, other):
         # higher-than is implemented here instead of lower-than in order to turn min-heap to max-heap
@@ -91,18 +95,19 @@ class Node:
             return True
 
     def get_priority(self, alpha=2):
-        return self.max_gumbel + self.epsilon * (self.upper_bound - self.lengths)
+        return self.max_gumbel + self.epsilon * (self.alpha_mst - self.lengths)
 
     def get_priority_max_gumbel(self):
         return self.max_gumbel
 
     def get_upper_bound(self):
+        # Deprecated
         return self.lengths + self.bound_length_togo()
 
     def bound_length_togo(self):
         if self.heuristic == 'mst':
-            return -self.alpha * mst.prim_np(Node.dist.numpy(), self.prefix)\
-                if self.t != Node.graph_size else 0  # self.not_visited+[self.first_a]
+            return -self.alpha * mst.prim_pytorch(Node.dist)\
+                if self.t != Node.graph_size else 0  # torch.tensor(self.not_visited+[self.first_a])
 
         elif self.heuristic == 'greedy':
             return -self.alpha * mst.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
@@ -307,7 +312,7 @@ class PriorityQueue:
             logprob_so_far=self.current_node.logprob_so_far + logprobs[special_action],
             max_gumbel=self.current_node.max_gumbel,
             next_actions=not_visited,
-            upper_bound=self.current_node.upper_bound,
+            alpha_mst=self.current_node.alpha_mst,
             depth=self.current_node.depth + 1,
             t_opt=self.current_node.t_opt,
             dfs_like=self.dfs_like)
@@ -340,7 +345,7 @@ class PriorityQueue:
                 logprob_so_far=self.current_node.logprob_so_far,
                 max_gumbel=other_max_gumbel,
                 next_actions=other_actions,
-                upper_bound=self.current_node.upper_bound,
+                alpha_mst=self.current_node.alpha_mst,
                 depth=self.current_node.depth + 1,
                 t_opt=False,
                 dfs_like=False)

@@ -49,7 +49,7 @@ class DirPG:
         log_p_opt, opt_length = self.run_actions(state, opt_actions, batch, fixed)
         log_p_direct, direct_length = self.run_actions(state, direct_actions, batch, fixed)
 
-        direct_loss = (log_p_opt - log_p_direct) / epsilon
+        direct_loss = (log_p_opt - log_p_direct) / (10.+epsilon)
         to_log.update({'opt_cost': opt_length,
                        'direct_cost': direct_length,
                        'opt_objective': opt_objectives,
@@ -59,10 +59,8 @@ class DirPG:
         return direct_loss, to_log
 
     def sample_t_opt_search_t_direct(self, state, fixed, epsilon=2.0, inference=False):
-        start_encoder = time.time()
 
         batch_size = state.ids.size(0)
-        # self.decoder = self.decoder.to('cpu')
         _, state = self.forward_and_update(state, fixed)
 
         queues = [a_star_sampling.PriorityQueue(init_state=state[i],
@@ -84,13 +82,10 @@ class DirPG:
             dfs.append(q.dfs)
             jumps.append(q.others)
 
-        pop_t, model_t, stack_t, expand_t = [], [], [], []
-        end_beg = time.time()
-        inner_s, inner_o = 0, 0
+        batch_queues = len(queues)
         while queues:  # batch
-            start = time.time()
             parents = []
-            copy_queues = copy.copy(queues) # TODO remove copy
+            copy_queues = copy.copy(queues)
             for queue in copy_queues:
                 parent = queue.pop()
 
@@ -101,45 +96,16 @@ class DirPG:
                     continue
                 else:
                     parents.append(parent)
-            after_pop = time.time()
 
             if len(parents) > 0:
                 batch_state = state.stack_state(parents)
-                after_stack = time.time()
                 log_p, state = self.forward_and_update(batch_state, fixed)
 
                 # log_p = log_p.numpy()
-                after_model = time.time()
 
                 idx = torch.tensor(range(len(queues)))
                 for i, queue in zip(idx, queues):
-                    a, b = queue.expand(state[i], log_p[i])
-                    inner_s += a
-                    inner_o += b
-
-                after_expand = time.time()
-                pop_t.append(after_pop - start)
-                stack_t.append(after_stack - after_pop)
-                model_t.append(after_model - after_stack)
-                expand_t.append(after_expand - after_model)
-
-        t = end_beg - start_encoder
-        """
-        print('---------- our time detailed  -------')
-        print('encoder: ', t)
-        print('pop: ', np.sum(pop_t))
-        print('stack: ', np.sum(stack_t))
-        print('model: ', np.sum(model_t))
-        print('expand: ', np.sum(expand_t))
-        print('expand special: ', inner_s)
-        print('expand other: ', inner_o)
-        print('expand oh: ', np.sum(expand_t) - (inner_s+inner_o))
-        print('total: ', t + np.sum(pop_t) + np.sum(stack_t) + np.sum(model_t) + np.sum(expand_t))
-        
-        print('avg interactions: ', np.mean(interactions))
-        print('avg candidates: ', np.mean(candidates))
-        print('avg pruned branches: ', np.mean(prune_count))
-        """
+                    queue.expand(state[i], log_p[i])
 
         return batch_t, {j: np.sum(i) if j == 'interactions' else np.mean(i)
                          for i, j in zip([interactions, candidates, prune_count, bfs, dfs, jumps],
@@ -162,7 +128,6 @@ class DirPG:
     def stack_trajectories_to_batch(opt_traj, direct_traj, device):
         actions_opt, objectives_opt = [], []
         actions_direct, objectives_direct = [], []
-        only_opt, only_opt_obj = [], []
         for t_o, t_d in zip(opt_traj, direct_traj):
             actions_opt.append(t_o.actions)
             objectives_opt.append(t_o.objective)
