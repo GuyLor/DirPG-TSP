@@ -1,9 +1,8 @@
 import numpy as np
 import copy
-import time
 import torch
 from torch.nn import DataParallel
-import a_star_sampling
+from dirpg_tsp import a_star_sampling
 from utils import utils_gumbel
 
 class DirPG:
@@ -29,8 +28,11 @@ class DirPG:
 
     def train_dirpg(self, batch, epsilon=1.0):
         embeddings = self.encoder(batch, only_encoder=True)
-        state = self.encoder.problem.make_state(batch)
         fixed = self.encoder.precompute(embeddings)
+        state = self.encoder.problem.make_state(batch)
+
+        # TODO: create cpp Batchedstate object
+
 
         with torch.no_grad():
             opt_direct, to_log = self.sample_t_opt_search_t_direct(state,
@@ -82,7 +84,6 @@ class DirPG:
             dfs.append(q.dfs)
             jumps.append(q.others)
 
-        batch_queues = len(queues)
         while queues:  # batch
             parents = []
             copy_queues = copy.copy(queues)
@@ -101,7 +102,8 @@ class DirPG:
                 batch_state = state.stack_state(parents)
                 log_p, state = self.forward_and_update(batch_state, fixed)
 
-                # log_p = log_p.numpy()
+                # TODO: make sure that log_p is not on the gpu before .numpy()
+                log_p = log_p.numpy()
 
                 idx = torch.tensor(range(len(queues)))
                 for i, queue in zip(idx, queues):
@@ -120,7 +122,18 @@ class DirPG:
         if first_action is not None:
             selected = torch.ones_like(selected) * first_action
         #selected = torch.argmax(log_p, -1)
-        state = batch.update(selected, update_length=False)
+        state = batch.update(selected, update_length=True)
+
+
+        # special_action = state.prev_a.item()   ----->> selected ?
+        # s = time.time()
+        # not_visited = [i for i in self.current_node.not_visited if i != special_action] ----->> mask ?
+        #length = -(cur_coord - self.current_node.cur_coord).norm(p=2, dim=-1)
+        # cur_coord = state.loc[self.current_node.id, special_action]
+        # length = state.lengths
+        # if len(self.current_node.prefix)+1 == self.graph_size:
+            # length -= (self.first_coord - cur_coord).norm(p=2, dim=-1)
+
 
         return log_p, state
 

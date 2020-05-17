@@ -199,7 +199,7 @@ def train_dirpg_batch(
     x = move_to(batch, opts.device)
     # Evaluate model, get costs and log probabilities
     # dirpg_trainer.search_params['alpha'] = np.min([opts.alpha*math.exp(0.002 * step), 4.0])
-    eps = np.max([opts.epsilon*math.exp(-opts.annealing * step), opts.min_eps])
+    eps = opts.epsilon # np.max([opts.epsilon*math.exp(-opts.annealing * step), opts.min_eps])
     direct_loss, to_log = dirpg_trainer.train_dirpg(x, epsilon=eps)
     if direct_loss is not None:
         loss = direct_loss.sum()

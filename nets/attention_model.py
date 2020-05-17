@@ -91,9 +91,10 @@ class Decoder(nn.Module):
                 self.project_step_context(self._get_parallel_step_context(fixed.node_embeddings, state))
 
         # Compute keys and values for the nodes
-        glimpse_K, glimpse_V, logit_K = self._get_attention_node_data(fixed, state)
+        glimpse_K, glimpse_V, logit_K = self._get_attention_node_data(fixed,state)
 
         # Compute the mask
+        # TODO: if dirpg do mask=state.mask (should be torch.Tensor([batch_size, graph_size],dtype=torch.unint8)
         mask = state.get_mask()
         # Compute logits (unnormalized log_p)
         log_p, glimpse = self._one_to_many_logits(query, glimpse_K, glimpse_V, logit_K, mask)
