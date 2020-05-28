@@ -49,7 +49,12 @@ class AttentionModelFixed(NamedTuple):
             glimpse_val=self.glimpse_val.to(device),
             logit_key=self.logit_key.to(device)
         )
-
+    def print_size(self):
+        print('node_embeddings: ', self.node_embeddings.size())
+        print('context_node_projected: ', self.context_node_projected.size())
+        print('glimpse_key: ', self.glimpse_key.size())
+        print('glimpse_val: ', self.glimpse_val.size())
+        print('logit_key: ', self.logit_key.size())
 
 class Decoder(nn.Module):
     def __init__(self,

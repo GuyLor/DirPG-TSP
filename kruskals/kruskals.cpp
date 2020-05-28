@@ -3,20 +3,12 @@
 #include <iostream>
 #include <vector>
 
+//#include <pybind11/stl.h>
+//#include <pybind11/complex.h>
+//#include <pybind11/functional.h>
+
 using namespace std;
 
-// #include "union_find.hpp"
-
-
-// std::cout << "############\n";
-// std::cout << torch::get_num_threads() << std::endl;
-// // std::cout << omp_get_max_threads() << std::endl;
-// std::cout << "############\n";
-// torch::set_num_threads(6);
-// std::cout << "############\n";
-// std::cout << torch::get_num_threads() << std::endl;
-// // std::cout << omp_get_max_threads() << std::endl;
-// std::cout << "############\n";
 
 std::vector<torch::Tensor> get_root(torch::Tensor parents, torch::Tensor node){
     std::vector<torch::Tensor> path = {node};
@@ -73,6 +65,7 @@ torch::Tensor get_tree(torch::Tensor edges, int n, bool adj = true) {
                 // Update adjacency matrix.
                 adj_matrix[sample_idx][i][j] = 1;
                 adj_matrix[sample_idx][j - 1][i] = 1;
+
                 mst_val_idx[sample_idx][edge_idx] = 1;
                 num_selected_edges++;
                 if (num_selected_edges == (n - 1)){
@@ -246,76 +239,9 @@ torch::Tensor kruskals(torch::Tensor weights_and_edges, int n) {
     return adj_matrix;
 }
 
-
-struct BatchedHeapNode {
-  torch::Tensor ids;
-  torch::Tensor prev_a;
-  torch::Tensor first_a;
-  torch::Tensor visited;
-  torch::Tensor length;
-  torch::Tensor i;
-};
-
-struct HeapNode {
-  double score;
-  int start_node;
-  torch::Tensor ids;
-
-
-
-  //HeapNode(double s, int sn): score(s), start_node(sn) {}
-  //HeapNode(const HeapNode& other) {
-  // score = other.score;
-  // start_node = other.start_node;
-  //}
-  bool operator<(const HeapNode &other) const {
-     return score < other.score;
-  }
-};
-
-class Heap {
- public:
-    Heap() {}
-    ~Heap() {}
-    
-    void push(HeapNode new_node) {
-      elements_.push_back(new_node);  // Copies by value
-      std::push_heap(elements_.begin(), elements_.end());
-    }
-    
-    HeapNode pop() {
-      HeapNode result = elements_.front();
-      std::pop_heap(elements_.begin(), elements_.end());
-      elements_.pop_back();
-      // py::make_tuple(result.score, result.start_node);
-      return result;
-    }
-    
-    void print() {
-      // std::cout << elements_ << std::endl;   
-    }
-    
- private:
-    std::vector<HeapNode> elements_;
-};
-
 namespace py = pybind11;
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("get_tree", &get_tree, "Get Tree");
   m.def("get_root", &get_root, "Get Root");
   m.def("kruskals", &kruskals, "Kruskals");
-
-  py::class_<HeapNode>(m, "HeapNode")
-      .def(py::init<double,int,at::Tensor>())
-      .def_readonly("score", &HeapNode::score)
-      .def_readonly("start_node", &HeapNode::start_node)
-      .def_readonly("ids", &HeapNode::ids);
-
-  py::class_<Heap>(m, "Heap")
-      .def(py::init<>())
-      .def("push", &Heap::push)
-      .def("pop", &Heap::pop, pybind11::return_value_policy::move	)
-      .def("print", &Heap::print);
-    
-  //m.def("call_go", &call_go);
 }

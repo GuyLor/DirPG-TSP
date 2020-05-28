@@ -2,11 +2,13 @@
 import numpy as np
 import torch
 
-def sample_gumbel(mu):
+def sample_gumbel(mu_size):
     """Sample a Gumbel(mu)."""
-    return -np.log(np.random.exponential()) + mu
+    m = torch.distributions.gumbel.Gumbel(torch.zeros(mu_size), torch.ones(mu_size))
+    return m.sample()
+    # return -np.log(np.random.exponential()) + mu
 
-"""
+
 def sample_truncated_gumbel(mu, b):
     #Sample a Gumbel(mu) truncated to be less than b.
     m = torch.distributions.exponential.Exponential(torch.ones_like(mu))
@@ -15,9 +17,9 @@ def sample_truncated_gumbel(mu, b):
 """
 def sample_truncated_gumbel(mu, b):
     # Sample a Gumbel(mu) truncated to be less than b.
-    return -np.log(np.random.exponential() + np.exp(-b + mu)) + mu
+    return -np.log((np.random.exponential()) + np.exp(-b + mu)) + mu
 
-
+"""
 def sample_gumbel_argmax(logits):
     """Sample from a softmax distribution over logits.
 

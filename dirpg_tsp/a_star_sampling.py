@@ -1,26 +1,65 @@
 
-import time
-import copy
 import torch
-import heapq
+import numpy as np
+import copy
+import kruskals_cpp
+import dirpg_cpp
 from utils import utils_gumbel
-# import minimum_spanning_tree
-from dirpg_tsp import mst
+
+
+class CPP_manager:
+    def __init__(self, root_node, batch_size, graph_size):
+
+
+        root_cpp_converter = dirpg_cpp.convert_python_to_cpp(*root_node.get())
+
+        self.batched_heaps = dirpg_cpp.BatchedHeaps(root_cpp_converter, batch_size, graph_size)
+        self.objects_dict = {root_cpp_converter: batch_size}
+        self.batch_size = batch_size
+
+    def pop_batch(self):
+
+        (parents, to_remove), trajs = self.batched_heaps.pop_batch()
+        for converter in to_remove:
+            self.objects_dict[converter] -= 1
+            if self.objects_dict[converter] == 0:
+                del self.objects_dict[converter]
+
+        return Node.create_node_from_cpp(parents), trajs
+
+    def push_batch(self, node, to_avoid):
+        cpp_converter = dirpg_cpp.convert_python_to_cpp(*node.get())
+        self.objects_dict.update({cpp_converter: copy.copy(self.batch_size)})
+        self.batched_heaps.push_batch(cpp_converter, to_avoid)
 
 
 class Trajectory:
-    def __init__(self, actions, gumbel, length, objective):
-        self.actions = actions
-        self.gumbel = gumbel
-        self.length = length
-        self.objective = objective
+    main_queue = None
+
+    def __init__(self):
+
+        self.num_candidates = 0
+        self.t_opt = None
+        self.t_direct = None
+
+    def set_trajectory(self, cpp_traj):
+        self.num_candidates += 1
+        if self.num_candidates == 1:  # if t_opt
+            self.t_opt = cpp_traj
+            self.t_direct = cpp_traj
+            self.main_queue.lower_bound[cpp_traj.idx] = cpp_traj.objective
+
+        else:
+            if cpp_traj.objective > self.t_direct.objective:
+                self.t_direct = cpp_traj
+                self.main_queue.lower_bound[cpp_traj.idx] = cpp_traj.objective
 
     def print_trajectory(self):
         print('--------  Trajectory  ---------')
-        print('actions:  ', self.actions)
-        print('gumbel:  ', self.gumbel)
-        print('length:  ', self.length)
-        print('objective:  ', self.objective)
+        print('t_opt:  ', self.t_opt)
+        print('t_direct:  ', self.t_direct)
+        print('t_direct objective:  ', self.t_direct.objective)
+        print('t_opt objective:  ', self.t_opt.objective)
         print('-------------------------------')
 
 
@@ -35,65 +74,42 @@ class Node:
     mst_val = None
 
     def __init__(self,
-                 id,
-                 first_a,
-                 next_actions,
-                 not_visited,
-                 prefix=[],
-                 lengths=0.0,
-                 cur_coord=None,
-                 done=False,
-                 logprob_so_far=0,
-                 bound_togo=None,
-                 depth=0,
-                 max_gumbel=None,
-                 t_opt=True,
-                 dfs_like=False):  # How much total objective t_opt achieved.
+                 ids,  # ids of sample in the batch - maybe to remove
+                 t,  # time-step (not necessarily the same t for each sample)
+                 next_actions,  # mask: 1 available, 0 unavailable
+                 not_visited,  # mask: 1 available, 0 unavailable (note that next_actions!=not_visited)
+                 prefix,  # e.g.: [2,6,1,0,-1,-1,-1,-1]
+                 lengths,
+                 cur_coord,
+                 done,
+                 logprob_so_far,
+                 bound_togo,
+                 max_gumbel,
+                 is_t_opt):  # true: opt, false: direct
 
-        if max_gumbel is None:
-            max_gumbel = utils_gumbel.sample_gumbel(0)
-
-        self.id = id
-        self.first_a = first_a
-
+        self.ids = ids
+        self.t = t
+        self.next_actions = next_actions
         self.not_visited = not_visited
         self.prefix = prefix
-        self.t = len(self.prefix)
 
         self.lengths = lengths
-
         self.cur_coord = cur_coord
-
         self.done = done
         self.logprob_so_far = logprob_so_far
         self.max_gumbel = max_gumbel
-        self.next_actions = next_actions
+        self.is_t_opt = is_t_opt
 
-        self.depth = depth
         if self.dynamic_weighting:
-            self.alpha = 1 + self.alpha*(1-self.t/self.graph_size)
-
-        self.t_opt = t_opt  # true: opt, false: direct
-        self.dfs_like = dfs_like
+            self.alpha = 1 + self.alpha * (1 - self.t / self.graph_size)
 
         self.bound_togo = bound_togo
+
         self.eps_reward = self.epsilon * (self.lengths + self.alpha * self.bound_togo)
 
         self.priority = self.get_priority()
         self.objective = self.priority
         self.upper_bound = self.priority  # self.get_upper_bound()
-
-    def __lt__(self, other):
-        # higher-than is implemented here instead of lower-than in order to turn min-heap to max-heap
-        if self.t_opt == other.t_opt and not self.dfs_like: #false==false
-            return self.priority > other.priority
-        elif self.t_opt or self.dfs_like:
-            """
-            This is how we sample t_opt, the starting node is with t_opt=True and
-            its 'special child' will be also with t_opt=True and because we always returning true
-            when we compare it to the 'other childrens' (where t_opt=False) the special path is sampled (speical childs only)
-            """
-            return True
 
     def get_priority(self, alpha=2):
         return self.max_gumbel + self.eps_reward
@@ -102,26 +118,7 @@ class Node:
         return self.max_gumbel
 
     def get_upper_bound(self, city=None):
-        return self.max_gumbel + self.epsilon * (self.lengths + 1.0*self.bound_togo) #self.lengths + self.bound_length_togo()
-
-    def bound_length_togo(self, city):
-        """
-        if self.heuristic == 'mst':
-            return -self.alpha * mst.prim_pytorch(Node.dist)\
-                if self.t != Node.graph_size else 0  # torch.tensor(self.not_visited+[self.first_a])
-
-        elif self.heuristic == 'greedy':
-            return -self.alpha * mst.greedy_path(Node.dist.numpy(), self.prefix) if self.t != Node.graph_size else 0
-
-        else:  # both
-            assert self.heuristic == 'both'
-            return -self.alpha*(
-                    0.5 * mst.prim_pytorch(Node.dist, torch.tensor(self.not_visited + [self.first_a])) +
-                    0.5 * mst.greedy_path(Node.dist.numpy(), self.prefix)
-                ) if self.t != Node.graph_size else 0
-        """
-        return self.alpha_mst - self.mst_edges[city].sum()
-
+        return self.max_gumbel + self.epsilon * (self.lengths + 1.0 * self.bound_togo)  # self.lengths + self.bound_length_togo()
 
     def get_objective(self):
         """Computes the objective of the trajectory.
@@ -129,250 +126,228 @@ class Node:
         """
         return self.max_gumbel + self.epsilon * self.lengths
 
+    def get(self):
+        return self.priority, self.is_t_opt, self.done, self.ids, self.t, self.next_actions, self.not_visited,\
+               self.prefix, self.lengths, self.cur_coord, self.logprob_so_far, self.bound_togo, self.max_gumbel,\
+               self
+
+    def pack(self):
+        """
+        pack node to cpp API: float, bool, obj_adrs, int (row in the original batch)
+        """
+        return [[self.priority[i].item(),
+                 self.is_t_opt[i].item(),
+                 self.done[i].item(),
+                 self,
+                 i] for i in range(self.ids.size(0))]
+
     def print(self):
         print(' -----------    Node     -----------')
-        print('id:  ', self.id)
-        print('first_a:  ', self.first_a)
+        print('ids:  ', self.ids)
+        # print('first_a:  ', self.first_a)
         print('prefix:  ', self.prefix)
         print('not visited:  ', self.not_visited)
         print('next_actions:  ', self.next_actions)
         print('t:  ', self.t)
-        print('distance matrix:')
+        # print('distance matrix:')
         print('max_gumbel:  ', self.max_gumbel)
-        print('epsilon:   ',self.epsilon)
+        print('epsilon:   ', self.epsilon)
         print('alpha:   ', self.alpha)
         print('alpha * len_togo:   ', self.alpha * self.bound_togo)
-        print('eps_reward: ', self.eps_reward)
+        print('eps_reward: ', self.eps_reward, self.eps_reward.size())
         print('priority: ', self.priority)
         print('objective: ', self.objective)
-        print('upper bound: ',self.upper_bound)
+        # print('upper bound: ',self.upper_bound)
         print('lengths:  ', self.lengths)
         print('bound length togo: ', self.bound_togo)
         print('done:  ', self.done)
         print('logprob_so_far:  ', self.logprob_so_far)
 
-        print('t_opt:  ', self.t_opt)
+        print('is_t_opt:  ', self.is_t_opt)
         print(' -------------------------------')
+
+    @staticmethod
+    def create_node_from_cpp(args):
+        return Node(ids=args[0],
+                    t=args[1],
+                    next_actions=args[2].bool(),
+                    not_visited=args[3].bool(),
+                    prefix=args[4],
+                    lengths=args[5],
+                    cur_coord=args[6],
+                    done=args[7].bool(),
+                    logprob_so_far=args[8],
+                    bound_togo=args[9],
+                    max_gumbel=args[10],
+                    is_t_opt=args[11].bool())
 
 
 class PriorityQueue:
     def __init__(self,
                  init_state,
-                 distance_mat,
+                 graphs,
                  epsilon,
                  search_params,
                  inference=False
                  ):
-        self.queue = []
 
-        init_state = init_state._replace(first_a=init_state.first_a.squeeze(0),
-                                         prev_a=init_state.prev_a.squeeze(0),
-                                         visited_=init_state.visited_.squeeze(0),
-                                         lengths=init_state.lengths.squeeze(0),
-                                         cur_coord=init_state.cur_coord.squeeze(0),
-                                         ids=init_state.ids.squeeze(0),
-                                         i=init_state.i.squeeze(0))
+        special_action = init_state.prev_a
+        not_visited = ~init_state.visited.bool()
 
-        special_action = init_state.prev_a.item()
-        not_visited = [i for i in range(init_state.loc.size(1)) if i != special_action]
-        self.first_coord = init_state.loc[init_state.ids, special_action]
-        self.graph_size = distance_mat.shape[1]
+        dummy_idx = special_action.repeat(1, init_state.loc.size(-1)).unsqueeze(1)
+        self.first_coord = torch.gather(init_state.loc, 1, dummy_idx)
+
+        self.graph_size = graphs.size(1)
+        self.batch_size = graphs.size(0)
         ##########################################
-        #           global nodes parameters      #
-        Node.alpha = search_params['alpha']
+        #         global nodes parameters        #
+        Node.alpha = search_params.alpha
         Node.epsilon = epsilon
-        Node.dynamic_weighting = search_params['dynamic_weighting']
-        Node.heuristic = search_params['heuristic']
+        Node.dynamic_weighting = search_params.dynamic_weighting
+        Node.heuristic = search_params.heuristic
         Node.graph_size = self.graph_size
-        #Node.dist = distance_mat
-        self.mst_edges = mst.prim_pytorch(distance_mat)
-        self.mst_val = self.mst_edges.sum()
         ##########################################
+        #      TODO: sort edges, kruskals_cpp
 
-        root_node = Node(id=init_state.ids,
-                         first_a=init_state.first_a.item(),
-                         next_actions=not_visited, # torch.tensor(not_visited),  # number of cities
+        # self.mst_edges = mst.prim_pytorch(distance_mat)
+        # self.mst_val = self.mst_edges.sum()
+
+        device = not_visited.device
+        prefix = -torch.ones(self.batch_size, self.graph_size, device=device, dtype=torch.long)
+        # prefix = p.scatter_(-1,torch.zeros(self.batch_size, dtype=torch.long), special_action) #
+        prefix[:, 0] = special_action.squeeze(-1)
+        root_node = Node(ids=init_state.ids,
+                         t=init_state.i,
+                         next_actions=not_visited,  # torch.tensor(not_visited),  # number of cities
                          not_visited=not_visited,
-                         prefix=[special_action],
-                         lengths=0.0,
+                         prefix=prefix,
+                         lengths=torch.zeros(self.batch_size, 1, device=device),
                          cur_coord=self.first_coord,
-                         bound_togo=-self.mst_val,
-                         max_gumbel=utils_gumbel.sample_gumbel(0),
-                         t_opt=True)
+                         done=torch.zeros(self.batch_size, 1, device=device, dtype=torch.bool),
+                         logprob_so_far=torch.zeros(self.batch_size, 1, device=device),
+                         bound_togo=torch.ones(self.batch_size, 1, device=device),  # self.mst_val,
+                         max_gumbel=utils_gumbel.sample_gumbel(self.batch_size).unsqueeze(-1),
+                         is_t_opt=torch.ones(self.batch_size, device=device, dtype=torch.bool))
 
-        heapq.heappush(self.queue, root_node)
+        self.cpp_heaps = CPP_manager(root_node, self.batch_size, self.graph_size)
+        Trajectory.main_queue = self
+        self.batch_trajectories = [Trajectory() for _ in range(self.batch_size)]
+        self.lower_bound = [-float('Inf') for _ in range(self.batch_size)]
 
-        if search_params['independent_gumbel']:
-            direct_node = copy.copy(root_node)
-            direct_node.t_opt = False
-            heapq.heappush(self.queue, direct_node)
-
-        self.current_node = root_node
-        self.id = init_state.ids
-
-        self.trajectories_list = []
         self.t_opt = None
         self.t_direct = None
 
-        self.prune_count = 0
-
-        self.start_search_direct = False
-
-        self.start_time = float('Inf')
-        # self.max_search_time = max_search_time
         self.num_interactions = 0
-        self.first_improvement = search_params['first_improvement']
-        self.max_interactions = search_params['max_interactions']
-        self.dfs_like = search_params['dfs_like']
-        self.p = search_params['prune']
-        self.dynamic_weighting = search_params['dynamic_weighting']
+        self.first_improvement = search_params.first_improvement
+        self.max_interactions = search_params.max_interactions
+
+        self.dynamic_weighting = search_params.dynamic_weighting
         self.inference = inference
-        self.prune = False
 
-        self.dfs = 0
-        self.bfs = 0
-        self.others = 0
-
-        self.lower_bound = -float('Inf')
+        self.p = torch.ones(self.batch_size, dtype=torch.bool) * (not search_params.not_prune)
+        self.prune = torch.zeros(self.p.size(), dtype=torch.bool)
 
     def pop(self):
-        if not self.queue:
-            return 'break'
+        current_node, trajs_list = self.cpp_heaps.pop_batch()
+        # print('parents_list: ', len(parents_list), 'trajs_list: ', len(trajs_list))
+        for t in trajs_list:
+            self.batch_trajectories[t.idx].set_trajectory(t)
+
         """
-        print('^^^^^^^^^^^^^^^^')
-        for q in self.queue:
-            q.print()
-        print('^^^^^^^^^^^^^^^^')
-        """
-        parent = heapq.heappop(self.queue)
-
-        if not parent.t_opt:
-            if parent.prefix == self.current_node.prefix:
-                self.bfs += 1
-            elif parent.prefix[:-1] == self.current_node.prefix:
-                self.dfs += 1
-            else:
-                self.others += 1
-
-        self.current_node = parent
-
         if self.num_interactions >= self.max_interactions:
             return 'break'
 
         if self.prune and self.lower_bound > parent.upper_bound:
             self.prune_count += 1
             return self.pop()
+        """
+        return current_node
 
-        # Start the search time count
-        if not parent.t_opt and not self.start_search_direct:
-            self.start_time = time.time()
-            self.start_search_direct = True
-
-        if parent.done:
-            return self.set_trajectory(parent)
-
-        return parent
-
-    def set_trajectory(self, node):
-
-        t = Trajectory(actions=node.prefix,
-                       gumbel=node.max_gumbel,
-                       length=node.lengths,
-                       objective=node.objective)
-
-        self.trajectories_list.append(t)
-
-        if node.t_opt:
-            self.t_opt = t
-            self.t_direct = t
-            self.lower_bound = t.objective
-            self.prune = self.p
-            if self.inference:
-                return 'break'
-        else:
-            if t.objective > self.t_direct.objective:
-                # if len(self.trajectories_list) > 2:
-                #    print('here: ', len(self.trajectories_list))
-                self.t_direct = t
-                self.lower_bound = t.objective
-                if self.first_improvement:
-                    #print('*****  priority(direct) > priority(opt)   *****')
-                    return 'break'
-
-        if self.queue:
-            return self.pop()
-        else:
-            # print('break')
-            return 'break'
-
-    def expand(self, state, logprobs):
+    def expand(self, state, current_node, logprobs):
         self.num_interactions += 1
-        special_action = state.prev_a.item()
-        s = time.time()
-        not_visited = [i for i in self.current_node.not_visited if i != special_action]
-        #length = -(cur_coord - self.current_node.cur_coord).norm(p=2, dim=-1)
-        cur_coord = state.loc[self.current_node.id, special_action]
-        length = -state.lengths
+        special_action = state.prev_a
+        # visited = state.visited_.bool()
+        not_visited = current_node.not_visited.scatter(-1, special_action.unsqueeze(-1), False)
+        is_done = torch.all(~not_visited.transpose(1, 2), dim=1, keepdim=False)
+        prefix = current_node.prefix.scatter(-1, state.i - 1, special_action)
+        cur_coord = state.loc[current_node.ids, special_action]
 
-        if len(self.current_node.prefix)+1 == self.graph_size:
-            length -= (self.first_coord - cur_coord).norm(p=2, dim=-1)
-        # updated_prefix = self.current_node.prefix + [special_action]
-        #dist = np.delete(np.delete(self.orig_dist, self.current_node.prefix[1:], 0), self.current_node.prefix[1:], 1)
+        lengths = -state.lengths  # .squeeze(-1)
+
+        lengths = torch.where(is_done,
+                              lengths - (self.first_coord - cur_coord).norm(p=2, dim=-1),
+                              lengths)  # add distance to first node if it's complete trajectory
+
+        lp_special = torch.gather(logprobs, -1, special_action)
+
         special_child = Node(
-            id=self.current_node.id,
-            first_a=self.current_node.first_a,
+            ids=state.ids,
+            t=current_node.t + 1,
             not_visited=not_visited,
-            prefix=self.current_node.prefix + [special_action],
-            lengths=length, #self.current_node.lengths + length,
+            prefix=prefix,
+            lengths=lengths,
             cur_coord=cur_coord,
-            done=len(not_visited) == 0,
-            logprob_so_far=self.current_node.logprob_so_far + logprobs[special_action],
-            max_gumbel=self.current_node.max_gumbel,
+            done=is_done,
+            logprob_so_far=current_node.logprob_so_far + lp_special,
+            max_gumbel=current_node.max_gumbel,
             next_actions=not_visited,
-            bound_togo=self.current_node.bound_togo + self.mst_edges[special_action].sum(),
-            depth=self.current_node.depth + 1,
-            t_opt=self.current_node.t_opt,
-            dfs_like=self.dfs_like)
+            bound_togo=current_node.bound_togo,
+            is_t_opt=current_node.is_t_opt)
 
-        #special_child.print()
+        # to_prune = self.prune | (special_child.upper_bound < self.lower_bound)
+        to_prune = self.prune
+
+        self.cpp_heaps.push_batch(special_child, to_prune.squeeze(0))
+        """
         if self.prune and special_child.upper_bound < self.lower_bound:
             self.prune_count += 1
         else:
             heapq.heappush(self.queue, special_child)
 
+        """
         # Sample the max gumbel for the non-chosen actions and create an "other
         # children" node if there are any alternatives left.
 
-        m = time.time()
-        other_actions = [i for i in self.current_node.next_actions if i != special_action]
+        other_actions = current_node.next_actions.scatter(-1, special_action.unsqueeze(-1), False)
 
-        assert len(other_actions) == len(self.current_node.next_actions) - 1
-        if other_actions and not self.inference:
-            other_max_location = utils_gumbel.logsumexp(logprobs[other_actions])
-            other_max_gumbel = utils_gumbel.sample_truncated_gumbel(self.current_node.logprob_so_far + other_max_location,
-                                                                    self.current_node.max_gumbel)
+        assert torch.all(other_actions.sum(-1) == current_node.next_actions.sum(
+            -1) - 1), 'other_actions.sum(-1): {} current_node.next_actions.sum(-1) - 1): {}'.format(
+            other_actions.sum(-1), current_node.next_actions.sum(-1) - 1)
+
+        if not self.inference:
+            exp = torch.exp(logprobs)
+
+            exp[~other_actions.squeeze(1)] = 0
+            other_max_location = torch.log(exp.sum(-1)).unsqueeze(-1)
+
+            other_max_gumbel = utils_gumbel.sample_truncated_gumbel(current_node.logprob_so_far + other_max_location,
+                                                                    current_node.max_gumbel)
+
+            ignore = (other_max_location == -np.inf).squeeze(-1)
+
             other_children = Node(
-                id=self.current_node.id,
-                first_a=self.current_node.first_a,
-                not_visited=self.current_node.not_visited,
-                prefix=self.current_node.prefix,
-                lengths=self.current_node.lengths,
-                cur_coord=self.current_node.cur_coord,
-                done=self.current_node.done,
-                logprob_so_far=self.current_node.logprob_so_far,
+                ids=current_node.ids,
+                t=current_node.t,
+                not_visited=current_node.not_visited,
+                prefix=current_node.prefix,
+                lengths=current_node.lengths,
+                cur_coord=current_node.cur_coord,
+                done=current_node.done,
+                logprob_so_far=current_node.logprob_so_far,
                 max_gumbel=other_max_gumbel,
                 next_actions=other_actions,
-                bound_togo=self.current_node.bound_togo + self.mst_edges[special_action].sum(),
-                depth=self.current_node.depth + 1,
-                t_opt=False,
-                dfs_like=False)
+                bound_togo=current_node.bound_togo,  # + self.mst_edges[special_action].sum(),
+                is_t_opt=current_node.is_t_opt * False)
 
+            """
             if self.prune and other_children.upper_bound < self.lower_bound:
                 self.prune_count += 1
             else:
                 heapq.heappush(self.queue, other_children)
+            """
 
-        f = time.time()
-        sp = m - s
-        oth = f - m
-        return sp, oth
+            # to_prune = self.prune | (other_children.upper_bound < self.lower_bound) | ignore
+            to_prune = (self.prune | ignore)
+            self.cpp_heaps.push_batch(other_children, to_prune)
+
+

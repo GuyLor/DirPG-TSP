@@ -72,9 +72,9 @@ class StateTSP(NamedTuple):
         return self.lengths + (self.loc[self.ids, self.first_a, :] - self.cur_coord).norm(p=2, dim=-1)
 
     def update(self, selected, update_length=True):
-
         # Update the state
         #prev_a = selected[:, None]  # Add dimension for step
+
         prev_a = selected[:, None]
         # Add the length
         # cur_coord = self.loc.gather(
@@ -87,8 +87,10 @@ class StateTSP(NamedTuple):
             lengths = self.lengths + (cur_coord - self.cur_coord).norm(p=2, dim=-1)  # (batch_dim, 1)
 
         # Update should only be called with just 1 parallel step, in which case we can check this way if we should update
-
-        first_a = prev_a if self.i[0].item() == 0 else self.first_a
+        first_a = torch.where(self.i ==torch.zeros(lengths.size(),
+                                                   dtype=torch.int64,
+                                                   device=self.loc.device), prev_a, self.first_a)
+        #first_a = prev_a if self.i[0].item() == 0 else self.first_a
         if self.visited_.dtype == torch.uint8:
             # Add one dimension since we write a single value
             visited_ = self.visited_.scatter(-1, prev_a[:, :, None], 1)
@@ -134,6 +136,11 @@ class StateTSP(NamedTuple):
 
     def construct_solutions(self, actions):
         return actions
+
+    def print_size(self):
+        for s in self._fields:
+            print(s,':  ', getattr(self, s).size()) if getattr(self, s) is not None else print(None)
+            #print(getattr(self, s).size())
 
     def print_state(self):
         print('----------   state ----------')
