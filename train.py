@@ -242,6 +242,7 @@ def train_batch(
         tb_logger,
         opts
 ):
+    start_time = time.time()
     x, bl_val = baseline.unwrap_batch(batch)
     x = move_to(x, opts.device)
     bl_val = move_to(bl_val, opts.device) if bl_val is not None else None
@@ -263,10 +264,18 @@ def train_batch(
     grad_norms = clip_grad_norms(optimizer.param_groups, opts.max_grad_norm)
     optimizer.step()
 
+    global sum_batch_time
+    sum_batch_time += (time.time() - start_time)
     # Logging
     if step % int(opts.log_step) == 0:
         log_values(cost, grad_norms, epoch, batch_id, step,
                    log_likelihood, reinforce_loss, bl_loss, tb_logger, opts)
+
+        avg_batch_time = sum_batch_time/step if step > 0 else sum_batch_time
+        print('batch time: ',avg_batch_time)
+        seconds = (opts.n_epochs*(opts.epoch_size // opts.batch_size) - step) * avg_batch_time
+        GetTime(seconds)
+        print('============================')
 
     if opts.use_cuda:
         torch.cuda.empty_cache()
