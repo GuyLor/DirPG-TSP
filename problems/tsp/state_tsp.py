@@ -81,6 +81,7 @@ class StateTSP(NamedTuple):
         #     1,
         #     selected[:, None, None].expand(selected.size(0), 1, self.loc.size(-1))
         # )[:, 0, :]
+
         cur_coord = self.loc[self.ids, prev_a]
         lengths = self.lengths
         if update_length and self.cur_coord is not None:  # Don't add length for first action (selection of start node)

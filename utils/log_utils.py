@@ -1,6 +1,8 @@
+import numpy as np
+
 def log_values_dirpg(to_log, grad_norms, epoch, batch_id, step, writer, opts):
-    avg_cost_opt = to_log['opt_cost'].mean().item()
-    avg_cost_direct = to_log['direct_cost'].mean().item()
+    avg_cost_opt = -np.mean(to_log['opt_cost']) #.mean().item()
+    avg_cost_direct = -np.mean(to_log['direct_cost']) #.mean().item()
     grad_norms, grad_norms_clipped = grad_norms
 
     # Log values to screen

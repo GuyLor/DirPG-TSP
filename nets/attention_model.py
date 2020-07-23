@@ -159,7 +159,6 @@ class Decoder(nn.Module):
 
         current_node = state.get_current_node()
         batch_size, num_steps = current_node.size()
-
         if self.is_vrp:
             # Embedding of previous node + remaining capacity
             if from_depot:
@@ -208,16 +207,42 @@ class Decoder(nn.Module):
         else:  # TSP
 
             if num_steps == 1:  # We need to special case if we have only 1 step, may be the first or not
+                """
                 if state.i[0].item() == 0:
-                    # First and only step, ignore prev_a (this is a placeholder)
-                    return self.W_placeholder[None, None, :].expand(batch_size, 1, self.W_placeholder.size(-1))
+                   # First and only step, ignore prev_a (this is a placeholder)
+
+                   print('i ==0')
+                   print(self.W_placeholder[None, None, :].expand(batch_size, 1, self.W_placeholder.size(-1)))
+                   return self.W_placeholder[None, None, :].expand(batch_size, 1, self.W_placeholder.size(-1))
                 else:
-                    return embeddings.gather(
-                        1,
-                        torch.cat((state.first_a, current_node), 1)[:, :, None].expand(batch_size, 2,
-                                                                                       embeddings.size(-1))
-                    ).view(batch_size, 1, -1)
+                   print('else')
+                   print(embeddings.gather(
+                       1,
+                       torch.cat((state.first_a, current_node), 1)[:, :, None].expand(batch_size, 2,
+                                                                                      embeddings.size(-1))
+                   ).view(batch_size, 1, -1))
+                   return embeddings.gather(
+                       1,
+                       torch.cat((state.first_a, current_node), 1)[:, :, None].expand(batch_size, 2,
+                                                                                      embeddings.size(-1))
+                   ).view(batch_size, 1, -1)
+                
+                print('state.i == 0  ')
+                print(state.i == 0)
+                """
+                return torch.where(state.i.unsqueeze(-1) == 0,
+                            self.W_placeholder[None, None, :].expand(batch_size, 1,
+                                                                     self.W_placeholder.size(-1)),
+                            embeddings.gather(
+                                1,
+                                torch.cat((state.first_a, current_node), 1)[:, :, None].expand(batch_size, 2,
+                                                                                               embeddings.size(
+                                                                                                   -1))
+                            ).view(batch_size, 1,
+                                   -1))
+
             # More than one step, assume always starting with first
+            print('ever got here')
             embeddings_per_step = embeddings.gather(
                 1,
                 current_node[:, 1:, None].expand(batch_size, num_steps - 1, embeddings.size(-1))
