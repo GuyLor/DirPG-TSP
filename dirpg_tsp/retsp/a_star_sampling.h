@@ -2,6 +2,7 @@
 #define A_STAR_SAMPLING_H__
 
 #include <vector>
+#include <set>
 
 #include "node_allocator.h"
 #include "batched_graphs.h"
@@ -29,7 +30,13 @@ struct EnvInfo{
 
 class AstarSampling {
  public:
-  AstarSampling(int batch_size, int search_budget, int graph_size, float epsilon, float alpha, int seed);
+  AstarSampling(int batch_size,
+                int search_budget,
+                int graph_size,
+                float epsilon,
+                float alpha,
+                bool dynamic_weighting,
+                int seed);
   void initialize(torch::Tensor batch_start_city, torch::Tensor weights);
   void expand(torch::Tensor batch_special_action,
               torch::Tensor batch_logprobs,
@@ -38,7 +45,10 @@ class AstarSampling {
   EnvInfo popBatch();
   ToptTdirect getTrajectories();
   void clear();
-  torch::Tensor non_empty_heaps;
+  torch::Tensor getNonEmptyHeaps();
+
+
+
 
  protected:
 
@@ -46,6 +56,8 @@ class AstarSampling {
   int batch_size_;
   float epsilon_;
   float alpha_;
+  bool dynamic_weighting_;
+
 
   NodeAllocator<MstNode> mst_node_allocator_;
   NodeAllocator<GumbelState> gumbel_node_allocator_;
@@ -56,6 +68,7 @@ class AstarSampling {
   BatchedHeaps heaps_;
   BatchedGraphs graphs_;
   ToptTdirect trajectories_;
+  EmptyHeapsFilter heaps_filter_;
 
   default_random_engine random_generator_;
 

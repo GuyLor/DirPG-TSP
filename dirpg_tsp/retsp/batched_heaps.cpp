@@ -42,28 +42,34 @@ BatchedHeaps::BatchedHeaps(int batch_size){
     }
 }
 
-HeapNode BatchedHeaps::pop(int sample_idx, ToptTdirect &trajectories, torch::Tensor &non_empty_heaps){
+HeapNode BatchedHeaps::pop(int heap_id, int sample_idx, ToptTdirect &trajectories, EmptyHeapsFilter &heaps_filter){
         bool to_pop = true; //!heaps_[sample_idx].is_empty();
         HeapNode node;
-        while (to_pop ){
-            node = heaps_[sample_idx].pop();
-            bool non_empty_heap = !heaps_[sample_idx].is_empty();
-            //to_pop = (node.done || node.is_any_next_legals) && full_heap;
-            to_pop = node.done  && non_empty_heap;
-            non_empty_heaps[sample_idx] = non_empty_heap;
+        while (to_pop){
+            node = heaps_[heap_id].pop();
+            bool empty_heap = heaps_[heap_id].is_empty();
+            //if (!node.t_opt){
+            //    trajectories.t_direct.objectives[sample_idx]
+            //}
+            bool to_prune = node.to_prune(trajectories.t_direct.costs[heap_id]);
+            if (to_prune) trajectories.prune_count[heap_id] += 1;
+            to_pop = (node.done || to_prune)  && !empty_heap;
 
-            if(node.done){
-                trajectories.setTrajectory(sample_idx, node.priority, node.outer_node);
-            }
+            if (empty_heap) {heaps_filter.filter(heap_id, sample_idx);}
+            //non_empty_heaps[sample_idx] = non_empty_heap;
+
+            if(node.done)
+                trajectories.setTrajectory(heap_id, node.priority, node.outer_node);
         }
         return node;
     }
 
-void BatchedHeaps::push(int sample_idx, OuterNode outer_node, float priority){
-        HeapNode node(priority, outer_node);
-        //node.dump();
-        heaps_[sample_idx].push(node);
-    }
+void BatchedHeaps::push(int heap_id, OuterNode outer_node, float epsilon){
+
+    HeapNode node(outer_node.computePriority(epsilon), outer_node);
+    //node.dump();
+    heaps_[heap_id].push(node);
+}
 
 void BatchedHeaps::clearHeaps(){
     for (int i=0; i<batch_size_; i++){
@@ -71,6 +77,6 @@ void BatchedHeaps::clearHeaps(){
     }
 }
 
-void BatchedHeaps::printHeap(int sample_idx){
-    heaps_[sample_idx].printHeap();
+void BatchedHeaps::printHeap(int heap_id){
+    heaps_[heap_id].printHeap();
 }

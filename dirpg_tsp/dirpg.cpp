@@ -166,13 +166,13 @@ vector<float> compute_mst(BatchedGraphs& graphs, int batch_size){
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
   py::class_<AstarSampling>(m, "AstarSampling")
-      .def(py::init<int, int, int, float, float, int>())
+      .def(py::init<int, int, int, float, float,bool, int>())
       .def("initialize", &AstarSampling::initialize)
       .def("expand", &AstarSampling::expand)
       .def("popBatch", &AstarSampling::popBatch)
       .def("getTrajectories", &AstarSampling::getTrajectories)
-      .def("clear", &AstarSampling::clear)
-      .def_readwrite("non_empty_heaps", &AstarSampling::non_empty_heaps);
+      .def("getNonEmptyHeaps", &AstarSampling::getNonEmptyHeaps)
+      .def("clear", &AstarSampling::clear);
 
   py::class_<EnvInfo>(m, "EnvInfo")
       //.def(py::init<HeapNode>())
@@ -180,6 +180,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readonly("batch_prev_city", &EnvInfo::batch_prev_city)
       .def_readonly("batch_next_actions", &EnvInfo::batch_next_actions);
 
+  py::class_<EmptyHeapsFilter>(m, "EmptyHeapsFilter")
+      .def_readonly("non_empty_heaps", &EmptyHeapsFilter::non_empty_heaps);
+      //.def_readonly("active_heaps", &EnvInfo::active_heaps);
 
   py::class_<BatchedTrajectories>(m, "BatchedTrajectories")
       //.def(py::init<HeapNode>())
@@ -194,5 +197,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("get_t_opt_direct", &ToptTdirect::get_t_opt_direct)
       .def_readonly("t_opt", &ToptTdirect::t_opt)
       .def_readonly("t_direct", &ToptTdirect::t_direct)
+      .def_readonly("prune_count", &ToptTdirect::prune_count)
       .def_readonly("num_candidates", &ToptTdirect::num_candidates);
 }

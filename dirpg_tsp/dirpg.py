@@ -1,26 +1,26 @@
 import numpy as np
-import copy
 import torch
 from torch.nn import DataParallel
-from dirpg_tsp import a_star_sampling
 from utils import utils_gumbel
 import dirpg_cpp
 
 def print_cpp_state(state_cpp):
     print("=============  cpp state ============ ")
     print("prev_city: ",state_cpp.batch_prev_city)
-
+    print(state_cpp.batch_prev_city.size())
     print("t: ", state_cpp.batch_t)
-    print("done: ", state_cpp.done)
+    print(state_cpp.batch_t.size())
+    #print("done: ", state_cpp.done)
     print("next_actions: ")
     print(state_cpp.batch_next_actions)
+    print(state_cpp.batch_next_actions.size())
     print("==================================== ")
 
 def print_trajectory(t_opt,t_direct,t):
     print("------- trajectory ----------")
-    print(t_opt.actions)
-    print(t_direct.actions)
-    print(t.num_candidates)
+    print(t_opt.actions, t_opt.actions.size() )
+    print(t_direct.actions, t_direct.actions.size())
+    print(t.num_candidates, len(t.num_candidates))
     print("------- ----- ----------")
 
 class DirPG:
@@ -33,12 +33,12 @@ class DirPG:
         self.decoder = model.decoder
         self.interactions = 0
         self.search_params = search_params
-
         self.a_star_cpp = dirpg_cpp.AstarSampling(search_params.batch_size,
                                                   search_params.max_interactions,
                                                   search_params.graph_size,
                                                   search_params.epsilon,
                                                   search_params.alpha,
+                                                  search_params.dynamic_weighting,
                                                   626)
 
     def train_dirpg(self, batch, epsilon=1.0):
@@ -46,28 +46,32 @@ class DirPG:
         self.num_of_non_empty_heaps = batch.size(0)
         self.a_star_cpp.clear()
         embeddings = self.encoder(batch, only_encoder=True)
-        fixed = self.encoder.precompute(embeddings)
+        init_fixed = self.encoder.precompute(embeddings)
         init_state = self.encoder.problem.make_state(batch)
-        empty_heaps = torch.tensor([True for _ in range(batch.size(0))])
-        with torch.no_grad():
+        #empty_heaps = torch.tensor([True for _ in range(batch.size(0))])
 
-            py_state = self.init_batched_priority_queue(batch, init_state, fixed)
-            first_coord = py_state.loc[py_state.ids, py_state.first_a, :]
+        with torch.no_grad():
+            py_state, fixed = self.init_batched_priority_queue(batch, init_state, init_fixed)
+            self.first_coord = py_state.loc[py_state.ids, py_state.first_a, :]
             step = 1
-            while step < self.search_params.max_interactions and self.num_of_non_empty_heaps >0:  ## interactions budget
+            while step < self.search_params.max_interactions and self.num_of_non_empty_heaps > 0:  ## interactions budget
                 #print("^^^^^^^^^^^^   ", step, "   ^^^^^^^^^^^^^^^")
                 cpp_state = self.a_star_cpp.popBatch()
-                if step == 1:
-                    # ignore the first pop
-                    self.a_star_cpp.non_empty_heaps = empty_heaps
-
+                #if step == 1:
+                # ignore the first pop
+                #    self.a_star_cpp.non_empty_heaps = empty_heaps
+                # print_cpp_state(cpp_state)
                 py_state = self.update_py_state(py_state, cpp_state)
+
                 fixed, py_state = self.filter_empty_heaps(fixed, py_state)
 
                 log_p, next_city = self.decode_and_sample(fixed, py_state)
 
-                cost = self.compute_cost(py_state, next_city, cpp_state.batch_t, first_coord)
+                cost = self.compute_cost(py_state, next_city, cpp_state.batch_t)
                 # self.print_trajectory()
+                #print("next_city ", next_city.size())
+                #print("log_p ", log_p.size())
+                #print("cost ", cost.size())
                 self.a_star_cpp.expand(next_city, log_p, cost)
                 step+=1
 
@@ -78,9 +82,9 @@ class DirPG:
         t_opt, t_direct = t.get_t_opt_direct()
 
         # forward again this time gradients tracking for the backward pass
-
-        log_p_opt = self.run_actions(init_state, t_opt.actions, batch, fixed)  #, opt_length
-        log_p_direct = self.run_actions(init_state, t_direct.actions, batch, fixed)  #, direct_length
+        #print_trajectory(t_opt, t_direct,t)
+        log_p_opt = self.run_actions(init_state, t_opt.actions, batch, init_fixed)  #, opt_length
+        log_p_direct = self.run_actions(init_state, t_direct.actions, batch, init_fixed)  #, direct_length
 
         direct_loss = (log_p_opt - log_p_direct) / epsilon
 
@@ -88,6 +92,7 @@ class DirPG:
                        'direct_cost': t_direct.costs,
                        'opt_objective': t_direct.objectives,
                        'direct_objective': t_direct.objectives,
+                       'prune_count': np.mean(t.prune_count),
                        'candidates': np.mean(t.num_candidates),
                        'interactions': self.interactions})
 
@@ -104,14 +109,18 @@ class DirPG:
         return log_p, selected
 
     def filter_empty_heaps(self, fixed, batch_state):
-        self.num_of_non_empty_heaps = torch.sum(self.a_star_cpp.non_empty_heaps)
+        self.non_empty_heaps = self.a_star_cpp.getNonEmptyHeaps().to(self.search_params.device)
+        self.num_of_non_empty_heaps = torch.sum(self.non_empty_heaps)
 
         if self.num_of_non_empty_heaps == batch_state.ids.size(0):
             return fixed, batch_state  # fixed[:batch.ids.size(0)]
         elif self.num_of_non_empty_heaps > 0:
             # if at least ine of the heaps are empty, index the input
-            return fixed[self.a_star_cpp.non_empty_heaps], batch_state[self.a_star_cpp.non_empty_heaps]
+            #print("5r5r5r5r5r5r5     ", self.num_of_non_empty_heaps, "    r5r5r5r5r5r5r5r")
+            self.first_coord = self.first_coord[self.non_empty_heaps]
+            return fixed[self.non_empty_heaps], batch_state[self.non_empty_heaps]
         else:
+            #print("5r5r5r5r5r5r5     ", self.num_of_non_empty_heaps, "    r5r5r5r5r5r5r5r")
             return None, None
 
     def init_batched_priority_queue(self, x, root_state, fixed):
@@ -125,7 +134,7 @@ class DirPG:
         root_state = root_state.update(next_city.squeeze(-1), update_length=False)
         self.a_star_cpp.initialize(next_city, graphs_weights)
 
-        return root_state
+        return root_state, fixed
 
     def print_trajectory(self):
         t = self.a_star_cpp.getTrajectories()
@@ -134,22 +143,30 @@ class DirPG:
 
     def update_py_state(self, py_state, cpp_state):
         prev_city = cpp_state.batch_prev_city[:, None]
-        py_state = py_state._replace(prev_a=prev_city,
-                          visited_=(~cpp_state.batch_next_actions.bool()).to(torch.uint8).unsqueeze(1),
-                          cur_coord=py_state.loc[py_state.ids, prev_city],
-                          i=cpp_state.batch_t.unsqueeze(1))
+        py_state = py_state._replace(prev_a=prev_city.to(self.search_params.device),
+                                     visited_=(~cpp_state.batch_next_actions.bool()).to(torch.uint8).to(self.search_params.device).unsqueeze(1),
+                                     cur_coord=py_state.loc[py_state.ids, prev_city].to(self.search_params.device),
+                                     i=cpp_state.batch_t.unsqueeze(1).to(self.search_params.device))
         return py_state
 
-    def compute_cost(self, py_state, next_city, t, first_coord):
+    def compute_cost(self, py_state, next_city, t):
         next_city = next_city[:, None]
         ### compute cost (if is last city add the cost of going back to first city) ###
         cur_coord = py_state.loc[py_state.ids, next_city]
         cost = -(cur_coord - py_state.cur_coord).norm(p=2, dim=-1)
 
         is_done = t == py_state.loc.size(1)-2
+        """
+        print("cost ", cost.size())
+        print("first_coord ", first_coord.size())
+        print("cur_coord ", cur_coord.size())
+        print("is_done ", is_done)
+        neh = getNonEmptyHeaps()
+        print(neh)
+        """
 
-        cost = torch.where(is_done.unsqueeze(-1),
-                           cost - (first_coord - cur_coord).norm(p=2, dim=-1),
+        cost = torch.where(is_done[self.non_empty_heaps].unsqueeze(-1),
+                           cost - (self.first_coord - cur_coord).norm(p=2, dim=-1),
                            cost)  # add distance to first node if it's complete trajectory
         return cost
 
@@ -163,7 +180,7 @@ class DirPG:
             log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
             # Select the indices of the next nodes in the sequences, result (batch_size) long
             log_p = log_p.squeeze(1)
-            action = action.long()
+            action = action.long().to(batch.device)
 
             state = state.update(action, update_length=True)
             # Collect output of step

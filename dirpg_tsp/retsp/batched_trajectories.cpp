@@ -1,8 +1,13 @@
 #include "batched_trajectories.h"
 
+//EmptyHeapsFilter::EmptyHeapsFilter
+
+
+
+
 
 BatchedTrajectories::BatchedTrajectories(int batch_size, int graph_size){
-    costs.resize(batch_size);
+    costs.resize(batch_size, -1e8);
     objectives.resize(batch_size);
     actions = torch::empty({batch_size, graph_size}, torch::kInt32); //
 }
@@ -21,6 +26,7 @@ ToptTdirect::ToptTdirect(int batch_size, int graph_size):
     t_direct(batch_size, graph_size){
 
         num_candidates.resize(batch_size);
+        prune_count.resize(batch_size);
 }
 
 void ToptTdirect::setTrajectory(int idx, float objective, OuterNode node){

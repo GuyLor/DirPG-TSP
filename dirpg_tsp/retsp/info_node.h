@@ -37,7 +37,6 @@ class InfoNode {
   // of converting existing nodes into the new ones we need.
   void transformToSpecialChild(int special_child, float cost);
   void transformToOtherChildren(int special_child);
-
  protected:
 
 
