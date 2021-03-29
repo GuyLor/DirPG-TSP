@@ -4,7 +4,7 @@ import os
 import pickle
 from problems.tsp.state_tsp import StateTSP
 from utils.beam_search import beam_search
-
+import numpy as np
 
 class TSP(object):
 
@@ -52,10 +52,17 @@ class TSP(object):
 
         return beam_search(state, beam_size, propose_expansions)
 
+def circle_points(r, n):
+    t = np.linspace(0.5, 2*np.pi, n)
+    x = r * np.cos(t) #+ 0.01*np.random.randn(*t.shape)
+    y = r * np.sin(t) #+ 0.01*np.random.randn(*t.shape)
+
+    return torch.from_numpy(r+np.c_[x, y])
+
 
 class TSPDataset(Dataset):
     
-    def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
+    def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None, circles=False):
         super(TSPDataset, self).__init__()
 
         self.data_set = []
@@ -67,7 +74,10 @@ class TSPDataset(Dataset):
                 self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
         else:
             # Sample points randomly in [0, 1] square
-            self.data = [torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)]
+            if not circles:
+                self.data = [torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)]
+            else:
+                self.data = [circle_points(0.4, size).to(torch.float32) for i in range(num_samples)]
 
         self.size = len(self.data)
 

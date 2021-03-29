@@ -74,7 +74,6 @@ class StateTSP(NamedTuple):
     def update(self, selected, update_length=True):
         # Update the state
         #prev_a = selected[:, None]  # Add dimension for step
-
         prev_a = selected[:, None]
         # Add the length
         # cur_coord = self.loc.gather(

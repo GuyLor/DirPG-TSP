@@ -8,7 +8,6 @@
 #define INFO_NODE_H__
 
 #include <vector>
-
 using namespace std;
 
 
@@ -28,6 +27,7 @@ class InfoNode {
   float getCost();
   bool getIsTopt();
   bool getIsDone();
+  bool getDfs();
   int getT();
   int getGraphSize();
   // Print out state, just for debugging.
@@ -35,7 +35,7 @@ class InfoNode {
 
   // Expansions. We'll re-use memory when possible, so define expansion in terms
   // of converting existing nodes into the new ones we need.
-  void transformToSpecialChild(int special_child, float cost);
+  void transformToSpecialChild(int special_child, float cost, bool dfs_like);
   void transformToOtherChildren(int special_child);
  protected:
 
@@ -46,7 +46,9 @@ class InfoNode {
   float cost_so_far_;
   int t_;
   bool is_t_opt_;
+  bool dfs_like_;
   bool done_;
+
 
 
 };

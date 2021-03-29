@@ -73,6 +73,10 @@ bool InfoNode::getIsDone(){
     return done_;
 }
 
+bool InfoNode::getDfs(){
+    return dfs_like_;
+}
+
 int InfoNode::getT(){
     return t_;
 }
@@ -92,10 +96,13 @@ void InfoNode::dump() const {
   py::print("t: " ,t_);
   }
 
-void InfoNode::transformToSpecialChild(int special_child, float cost) {
+void InfoNode::transformToSpecialChild(int special_child, float cost, bool dfs_like) {
   /* Make this node into a special child of its current values. */
   t_ += 1;
   prefix_[t_] = special_child;
+  dfs_like_ = dfs_like;
+  //py::print("cost so far: ",cost_so_far_);
+  //py::print("cost ", cost);
   cost_so_far_ += cost;
   if (prefix_.back() != -1){
     done_ = true;
@@ -105,5 +112,6 @@ void InfoNode::transformToSpecialChild(int special_child, float cost) {
 
 void InfoNode::transformToOtherChildren(int special_child) {
     is_t_opt_ = false;
+    dfs_like_ = false;
   /* Make this node into the other children of its current values. */
 }

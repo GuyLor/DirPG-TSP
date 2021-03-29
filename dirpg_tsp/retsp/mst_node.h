@@ -23,22 +23,27 @@ class MstNode {
 
   // Copies the input array by value.
   void setVisitedMask(char *visited_mask);
-
-  void setVisitedMask(const vector<char> &visited_mask_begin);
+  void setVisitedMask(const vector<char> &visited_mask);
+  void setVisitedMask(vector<bool> visited_mask);
 
   // Copies the input array by value.
   void setLegalNextActionMask(char *legal_next_action_mask);
-
   void setLegalNextActionMask(const vector<char> &legal_next_action_mask);
+  void setLegalNextActionMask(vector<bool> legal_next_action_mask);
 
   void setFirstLast(int first, int last);
+  void setNumVisited(int num);
 
   int getPrevCity();
+  int getNumVisited();
 
   bool isAnyLegalAction() const;
 
-  torch::Tensor getLegalNextActionMask();
-
+  torch::Tensor getLegalNextActionMaskTorch();
+  vector<char> getLegalNextActionMask();
+  vector<char> getVisitedMask();
+  vector<vector<float>> prepareTSPdistanceMatrix(const vector<vector<float>>& full_dm);
+  float computeLastStep(const vector<vector<float>>& full_dm);
   bool canUseEdge(int i, int j) const;
 
   // Print out state, just for debugging.
@@ -49,7 +54,7 @@ class MstNode {
   void transformToSpecialChild(int special_child);
   void transformToOtherChildren(int special_child);
 
- protected:
+ //protected:
   void setAllAreLegalNextActions();
 
 
@@ -66,6 +71,8 @@ class MstNode {
   // recently visited) and the last node (where the tour should end).
   int first_node_;
   int last_node_;
+
+  int num_visited_;
 
 };
 

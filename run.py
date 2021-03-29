@@ -9,7 +9,7 @@ import torch
 import torch.optim as optim
 from tensorboard_logger import Logger as TbLogger
 from torch.utils.tensorboard import SummaryWriter
-# from trains import Task
+from trains import Task
 
 from nets.critic_network import CriticNetwork
 from options import get_options
@@ -34,7 +34,7 @@ def run(opts):
     if not opts.no_tensorboard and opts.no_dirpg:
         tb_logger = TbLogger(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
     if not opts.no_dirpg:
-        #task = Task.init(project_name='DirPG-TSP', task_name=opts.run_name, output_uri='/tmp/blah')
+        task = Task.init(project_name='DirPG-TSP', task_name=opts.run_name)
         tb_logger = SummaryWriter(os.path.join(opts.log_dir, "{}_{}".format(opts.problem, opts.graph_size), opts.run_name))
         tb_logger.add_text('Comment', opts.comment,0)
 
@@ -110,12 +110,15 @@ def run(opts):
         )
     elif opts.baseline == 'rollout':
         baseline = RolloutBaseline(model, problem, opts)
+        print(" rollout" *30)
     else:
         assert opts.baseline is None, "Unknown baseline: {}".format(opts.baseline)
         baseline = NoBaseline()
 
     if opts.bl_warmup_epochs > 0:
+        print(opts.bl_warmup_epochs)
         baseline = WarmupBaseline(baseline, opts.bl_warmup_epochs, warmup_exp_beta=opts.exp_beta)
+        print(" WarmupBaseline" * 30)
 
     # Load baseline from data, make sure script is called with same type of baseline
     if 'baseline' in load_data:
@@ -163,18 +166,32 @@ def run(opts):
     if opts.eval_only:
         validate(model, val_dataset, opts)
     else:
-        for epoch in range(opts.epoch_start, opts.epoch_start + opts.n_epochs):
+        interactions_count = opts.epoch_start * opts.epoch_size * opts.max_interactions
+        epoch = opts.epoch_start
+        while interactions_count < opts.total_interactions: # for epoch in range(opts.epoch_start, opts.epoch_start + opts.n_epochs):
             train_epoch(
-                model,
-                optimizer,
-                baseline,
-                lr_scheduler,
-                epoch,
-                val_dataset,
-                problem,
-                tb_logger,
-                opts,
-            )
+                        model,
+                        optimizer,
+                        baseline,
+                        lr_scheduler,
+                        epoch,
+                        interactions_count,
+                        val_dataset,
+                        problem,
+                        tb_logger,
+                        opts,
+                    )
+            print("interactions_count model so far ", interactions_count)
+            n_interactions = get_inner_model(model).get_and_reset_interactions(opts.use_cuda, opts.no_dirpg)\
+                if opts.no_dirpg else model.model.get_and_reset_interactions(opts.use_cuda, opts.no_dirpg)
+            interactions_count += n_interactions
+
+            print("interactions_count model new", n_interactions)
+            interactions_count += get_inner_model(baseline.baseline.model).get_and_reset_interactions(opts.use_cuda, opts.no_dirpg)\
+                if baseline.__class__.__name__ != "NoBaseline" else 0
+            print("interactions_count baseline ", interactions_count)
+            print("interactions_count: {} out of {} ".format(interactions_count,opts.total_interactions ))
+            epoch += 1
 
 
 if __name__ == "__main__":

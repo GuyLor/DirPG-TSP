@@ -99,25 +99,33 @@ float BatchedGraphs::mstCost(int batch_index, const MstNode &cpp_node) {
 
   float total_cost = 0;
   int num_edges_used = 0;
-  //py::print("gfgfgf");
-
+  //py::print("-------- mst cost, ",batch_index, "  ---------------");
+  //if (batch_index==0){
+  //  cpp_node.dump();
+  //  py::print("cant use edges:");}
   for (const auto& edge : _graphs[batch_index]) {
     // Information in `cpp_node` determines whether we can use each edge.
-    if (!cpp_node.canUseEdge(edge.src, edge.dest)) continue;
+
+    if (!cpp_node.canUseEdge(edge.src, edge.dest)) {
+        //if (batch_index == 0){
+        //    py::print("src: ", edge.src, "dest: ", edge.dest);
+        //}
+        continue;
+        }
 
     int src_group = _uf.findRoot(edge.src);
     int dest_group = _uf.findRoot(edge.dest);
 
     if (src_group != dest_group) {
       _uf.merge(edge.src, edge.dest);
-      //py::print(edge.weight);
+      //if (batch_index==0)
+      //  py::print("edge in mst:  src: ",edge.src,"  dest:  ", edge.dest);
       total_cost += edge.weight;
       num_edges_used++;
 
       if (num_edges_used == graph_size_ - 1)  break;
     }
   }
-  //py::print("fkfkfkf");
-  assert(num_edges_used == graph_size_ - 1);
+  //assert(num_edges_used == graph_size_ - 1);
   return total_cost;
 }
