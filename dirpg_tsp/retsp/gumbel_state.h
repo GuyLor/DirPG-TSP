@@ -53,17 +53,20 @@ class GumbelState {
   // Expansions. We'll re-use memory when possible, so define expansion in terms
   // of converting existing nodes into the new ones we need.
 
-  void transformToSpecialChild(int special_action, torch::Tensor logprobs);
-  void transformToOtherChildren(int special_action, torch::Tensor logprobs, MstNode *parent_mst);
+  void transformToSpecialChild(int special_action, vector<float> logprobs);
+  void transformToOtherChildren(int special_action, vector<float> logprobs, MstNode *parent_mst);
   void setMaxGumbelLogprobs(float max_gumbel, float logprob_so_far);
   float getMaxGumbel();
   float sample_gumbel(float location=0.0, float scale=1.0);
   float sample_truncated_gumbel(float location, float b);
+
+
  protected:
 
   float max_gumbel_;
   float logprob_so_far_;
-  default_random_engine generator_;
+  float partialLogSumExp(vector<float> logprobs, vector<char> legal_next_actions);
+  default_random_engine &generator_;
   exponential_distribution<float> expo_;
 
 };

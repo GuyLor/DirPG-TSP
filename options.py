@@ -59,19 +59,23 @@ def get_options(args=None):
     parser.add_argument('--data_distribution', type=str, default=None,
                         help='Data distribution to use during training, defaults and options depend on problem.')
 
+    parser.add_argument('--total_interactions', type=int, default=int(1e7), help='total number of interactions for training')
     # DirPG
     parser.add_argument('--max_interactions', type=int, default=200, help='maximum number of env to search t_direct')
     parser.add_argument('--not_prune', action='store_true', help='not pruning branches in a star sampling')
+    parser.add_argument('--gumbel_top_k', action='store_true', help='set priority to max gumbel')
     parser.add_argument('--dfs_like', action='store_true', help='search for t_direct in dfs fashion')
-    parser.add_argument('--independent_gumbel', action='store_true', help='run the search with independent gumbel ')
+    parser.add_argument('--optimal_heuristic', action='store_true', help='use linear programming to solve tsp for the suffix')
+
+    parser.add_argument('--supervised', action='store_true', help='train with labels produced by concorde solver')
     parser.add_argument('--heuristic', type=str, default='mst',help='mst or greedy or both')
     parser.add_argument('--dynamic_weighting', action='store_true', help='dynamic weighting for bounded relaxation')
-    parser.add_argument('--epsilon', type=float, default=5.0, help='direct optimization hyper parameter')
-    parser.add_argument('--min_eps', type=float, default=1.0, help='direct optimization hyper parameter')
+    parser.add_argument('--epsilon', type=float, default=20.0, help='direct optimization hyper parameter')
+    parser.add_argument('--min_eps', type=float, default=5.0, help='direct optimization hyper parameter')
     parser.add_argument('--annealing', type=float, default=0, help='annealing ratio of epsilon')
     parser.add_argument('--alpha', type=float, default=2.0, help='alpha*MST (alpha=2.0 for an upper bound)')
-    parser.add_argument('--first_improvement', action='store_true',
-                        help='set t_direct to be the first improvement trajectory')
+    parser.add_argument('--k_improvement', type=int, default=-1,
+                        help='set t_direct to be the kth improvement trajectory')
     parser.add_argument('--comment', type=str, default='default comment',
                         help='comment for SummerayWriter')
 
@@ -96,8 +100,33 @@ def get_options(args=None):
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
     print('opts.use_cuda ',torch.cuda.is_available(), opts.use_cuda)
     r = "REINFORCE" if opts.no_dirpg else "DirPG"
+    if opts.run_name != 'run':
+        r += "_"+opts.run_name
+    elif not opts.no_dirpg:
+        d = True if opts.dynamic_weighting else False
+        opt_h = True if opts.optimal_heuristic else False
+        r += "_epsilon_{}_" \
+             "alpha_{}_" \
+             "dynamic_weighting_{}_" \
+             "optimal_heuristic_{}_" \
+             "bs_{}_" \
+             "interactions_{}_" \
+             "k_improvement_{}".format(opts.epsilon,
+                                       opts.alpha,
+                                       d,
+                                       opt_h,
+                                       opts.batch_size,
+                                       opts.max_interactions,
+                                       opts.k_improvement)
+    else:
+        r += "_bs_{}_baseline_{}".format(opts.batch_size,
+                                         opts.baseline)
+
     opts.run_name = "{}_{}".format(r,  time.strftime("%Y%m%dT%H%M%S"))
     opts.run_name = os.path.join(opts.exp_name, opts.run_name)
+    opts.not_prune = True if opts.gumbel_top_k else opts.not_prune
+    opts.max_interactions = opts.graph_size if opts.no_dirpg else opts.max_interactions
+    opts.max_interactions = 2*opts.max_interactions if opts.no_dirpg and opts.baseline == 'rollout' else opts.max_interactions
     #opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
     opts.save_dir = os.path.join(
         opts.output_dir,

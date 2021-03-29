@@ -8,7 +8,7 @@
 #include "retsp/a_star_sampling.h"
 #include "retsp/mst_node.h"
 #include "retsp/node_allocator.h"
-
+//#include <concorde.h>
 //#include <pybind11/stl.h>
 //#include <pybind11/complex.h>
 //#include <pybind11/functional.h>
@@ -163,16 +163,28 @@ vector<float> compute_mst(BatchedGraphs& graphs, int batch_size){
 
 */
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+void foo(){
+    py::print(" HERE IS PRINT");
+}
 
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("foo", &foo);
   py::class_<AstarSampling>(m, "AstarSampling")
-      .def(py::init<int, int, int, float, float, int>())
+      .def(py::init<int, int, int, float, float, bool, int, bool, bool,bool, int, int>())
       .def("initialize", &AstarSampling::initialize)
       .def("expand", &AstarSampling::expand)
       .def("popBatch", &AstarSampling::popBatch)
       .def("getTrajectories", &AstarSampling::getTrajectories)
-      .def("clear", &AstarSampling::clear)
-      .def_readwrite("non_empty_heaps", &AstarSampling::non_empty_heaps);
+      .def("getNonEmptyHeaps", &AstarSampling::getNonEmptyHeaps)
+      .def("getEmptyHeapsCount", &AstarSampling::getEmptyHeapsCount)
+      .def("printTime", &AstarSampling::printTime)
+      .def("setEpsilonAlpha", &AstarSampling::setEpsilonAlpha)
+      .def("getEpsilonAlpha", &AstarSampling::getEpsilonAlpha)
+      .def("updateHeapFilter", &AstarSampling::updateHeapFilter)
+      .def("setKImprovement", &AstarSampling::setKImprovement)
+      .def("setToPrint", &AstarSampling::setToPrint)
+      .def("computeTSP", &AstarSampling::computeTSP)
+      .def("clear", &AstarSampling::clear);
 
   py::class_<EnvInfo>(m, "EnvInfo")
       //.def(py::init<HeapNode>())
@@ -180,6 +192,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readonly("batch_prev_city", &EnvInfo::batch_prev_city)
       .def_readonly("batch_next_actions", &EnvInfo::batch_next_actions);
 
+  py::class_<EmptyHeapsFilter>(m, "EmptyHeapsFilter")
+      .def_readonly("non_empty_heaps", &EmptyHeapsFilter::non_empty_heaps);
+      //.def_readonly("active_heaps", &EnvInfo::active_heaps);
 
   py::class_<BatchedTrajectories>(m, "BatchedTrajectories")
       //.def(py::init<HeapNode>())
@@ -188,11 +203,45 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readonly("actions", &BatchedTrajectories::actions);
 
 
+  py::class_<MstNode>(m, "MstNode")
+      //.def(py::init<HeapNode>())
+      .def(py::init<int>())
+      .def("setVisitedMask",(void (MstNode::*)(char *)) &MstNode::setVisitedMask)
+      .def("setVisitedMask",(void (MstNode::*)(const vector<char> &)) &MstNode::setVisitedMask)
+      .def("setVisitedMask",(void (MstNode::*)(vector<bool>)) &MstNode::setVisitedMask)
+
+      .def("setLegalNextActionMask",(void (MstNode::*)(char *)) &MstNode::setLegalNextActionMask)
+      .def("setLegalNextActionMask",(void (MstNode::*)(const vector<char> &)) &MstNode::setLegalNextActionMask)
+      .def("setLegalNextActionMask",(void (MstNode::*)(vector<bool>)) &MstNode::setLegalNextActionMask)
+      //.def("setVisitedMask", &MstNode::setVisitedMask)
+      //.def("setLegalNextActionMask", &MstNode::setLegalNextActionMask)
+      .def("setFirstLast", &MstNode::setFirstLast)
+      .def("setNumVisited", &MstNode::setNumVisited)
+      .def_readwrite("graph_size_", &MstNode::graph_size_)
+      .def_readwrite("visited_mask_", &MstNode::visited_mask_)
+      .def_readwrite("legal_next_action_mask_", &MstNode::legal_next_action_mask_)
+      .def_readwrite("first_node_", &MstNode::first_node_)
+      .def_readwrite("last_node_", &MstNode::last_node_)
+      .def_readwrite("num_visited_", &MstNode::num_visited_);
+
+
+
+
+
+
+
+
 
   py::class_<ToptTdirect>(m, "ToptTdirect")
       //.def(py::init<HeapNode>())
       .def("get_t_opt_direct", &ToptTdirect::get_t_opt_direct)
       .def_readonly("t_opt", &ToptTdirect::t_opt)
       .def_readonly("t_direct", &ToptTdirect::t_direct)
+      .def_readonly("prune_count", &ToptTdirect::prune_count)
       .def_readonly("num_candidates", &ToptTdirect::num_candidates);
 }
+
+
+
+
+

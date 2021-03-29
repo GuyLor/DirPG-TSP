@@ -34,36 +34,63 @@ void Heap::printHeap(){
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-BatchedHeaps::BatchedHeaps(int batch_size){
+BatchedHeaps::BatchedHeaps(int batch_size, bool prune_flag){
 
     batch_size_ = batch_size;
+    prune_flag_ = prune_flag;
     for (int i=0; i<batch_size_; i++){
         heaps_.push_back(Heap());
     }
 }
 
-HeapNode BatchedHeaps::pop(int sample_idx, ToptTdirect &trajectories, torch::Tensor &non_empty_heaps){
+HeapNode BatchedHeaps::pop(int heap_id, int sample_idx, ToptTdirect &trajectories, EmptyHeapsFilter &heaps_filter){
         bool to_pop = true; //!heaps_[sample_idx].is_empty();
+        bool stop_first_improvement = false;
         HeapNode node;
-        while (to_pop ){
-            node = heaps_[sample_idx].pop();
-            bool non_empty_heap = !heaps_[sample_idx].is_empty();
-            //to_pop = (node.done || node.is_any_next_legals) && full_heap;
-            to_pop = node.done  && non_empty_heap;
-            non_empty_heaps[sample_idx] = non_empty_heap;
+        while (to_pop){
+            node = heaps_[heap_id].pop();
+            bool empty_heap = heaps_[heap_id].is_empty();
+            //if (!node.t_opt){
+            //    trajectories.t_direct.objectives[sample_idx]
+            //}
+            bool to_prune =  (prune_flag_ && node.to_prune(trajectories.t_direct.objectives[heap_id])) ||
+                             (node.outer_node.steps_left > heaps_filter.budget_left);
+            if (to_prune){
+               trajectories.prune_count[heap_id] += 1;
+               /*
+               if(heap_id == 0){
+               py::print("-------trajectory--------");
+               trajectories.t_direct.dump(heap_id);
+               py::print("--------pruned node-------");
+               node.dump();
+               }
+               */
+
+               }
+
 
             if(node.done){
-                trajectories.setTrajectory(sample_idx, node.priority, node.outer_node);
-            }
+                trajectories.setTrajectory(heap_id, node.outer_node);
+                if (trajectories.improvement_flag[heap_id])
+                    stop_first_improvement = true;
+                }
+
+
+            if (empty_heap || stop_first_improvement) {heaps_filter.filter(heap_id, sample_idx);}
+            //non_empty_heaps[sample_idx] = non_empty_heap;
+            to_pop = (node.done || to_prune)  && !empty_heap && !stop_first_improvement;
+
+
         }
         return node;
     }
 
-void BatchedHeaps::push(int sample_idx, OuterNode outer_node, float priority){
-        HeapNode node(priority, outer_node);
-        //node.dump();
-        heaps_[sample_idx].push(node);
-    }
+void BatchedHeaps::push(int heap_id, OuterNode outer_node){
+
+    HeapNode node(outer_node);
+    //node.dump();
+    heaps_[heap_id].push(node);
+}
 
 void BatchedHeaps::clearHeaps(){
     for (int i=0; i<batch_size_; i++){
@@ -71,6 +98,6 @@ void BatchedHeaps::clearHeaps(){
     }
 }
 
-void BatchedHeaps::printHeap(int sample_idx){
-    heaps_[sample_idx].printHeap();
+void BatchedHeaps::printHeap(int heap_id){
+    heaps_[heap_id].printHeap();
 }

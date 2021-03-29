@@ -45,8 +45,8 @@ class NodeAllocator {
   //T *split(T *parent, int special_child);
 
   T *split(MstNode *parent, int special_child);
-  T *split(GumbelState *parent_gumbel, MstNode *parent_mst, int special_action, torch::Tensor logprobs);
-  T *split(InfoNode *parent, int special_child, float cost);
+  T *split(GumbelState *parent_gumbel, MstNode *parent_mst, int special_action, vector<float> logprobs);
+  T *split(InfoNode *parent, int special_child, float cost, bool dfs_like);
 
  protected:
   vector<T *> nodes_;
@@ -113,7 +113,7 @@ T *NodeAllocator<T>::split(MstNode *parent, int special_child) {
 }
 
 template<typename T>
-T *NodeAllocator<T>::split(GumbelState *parent_gumbel, MstNode *parent_mst, int special_action, torch::Tensor logprobs) {
+T *NodeAllocator<T>::split(GumbelState *parent_gumbel, MstNode *parent_mst, int special_action, vector<float> logprobs) {
   // Modifies `parent` in place. Assumes it's not needed any more.
   GumbelState *other_children_node = parent_gumbel;
 
@@ -127,14 +127,14 @@ T *NodeAllocator<T>::split(GumbelState *parent_gumbel, MstNode *parent_mst, int 
 }
 
 template<typename T>
-T *NodeAllocator<T>::split(InfoNode *parent, int special_child, float cost) {
+T *NodeAllocator<T>::split(InfoNode *parent, int special_child, float cost, bool dfs_like) {
   // Modifies `parent` in place. Assumes it's not needed any more.
   InfoNode *other_children_node = parent;
 
   InfoNode *special_child_node = getNew();
   special_child_node->CopyState(parent);
 
-  special_child_node->transformToSpecialChild(special_child, cost);
+  special_child_node->transformToSpecialChild(special_child, cost, dfs_like);
   other_children_node->transformToOtherChildren(special_child);
 
   return special_child_node;

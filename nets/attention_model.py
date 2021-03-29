@@ -11,11 +11,12 @@ from utils.beam_search import CachedLookup
 from utils.functions import sample_many
 from problems.tsp.state_tsp import StateTSP
 from utils import utils_gumbel
-
+from problems.tsp import concorde_solver
 
 def set_decode_type(model, decode_type):
     if isinstance(model, DataParallel):
         model = model.module
+
     model.set_decode_type(decode_type)
 
 
@@ -80,6 +81,8 @@ class Decoder(nn.Module):
         self.mask_logits = mask_logits
         self.tanh_clipping = tanh_clipping
         self.temp = temp
+        self.count_interactions = False
+        self.register_buffer('interactions', torch.zeros(1))
         if not(is_vrp or is_orienteering or is_pctsp): # TSP
             # Learned input symbols for first action
             self.W_placeholder = nn.Parameter(torch.Tensor(2 * embedding_dim))
@@ -90,7 +93,6 @@ class Decoder(nn.Module):
         return log_p, mask
 
     def _get_log_p(self, fixed, state, normalize=True):
-
         # Compute query = context node embedding
         query = fixed.context_node_projected + \
                 self.project_step_context(self._get_parallel_step_context(fixed.node_embeddings, state))
@@ -108,7 +110,8 @@ class Decoder(nn.Module):
             log_p = torch.log_softmax(log_p / self.temp, dim=-1)
 
         assert not torch.isnan(log_p).any()
-
+        if self.count_interactions:
+            self.interactions.add_(log_p.size(0))
         return log_p, mask
 
     def _one_to_many_logits(self, query, glimpse_K, glimpse_V, logit_K, mask):
@@ -355,6 +358,8 @@ class AttentionModel(nn.Module):
                                mask_logits,
                                tanh_clipping)
 
+
+
     def set_decode_type(self, decode_type, temp=None):
         self.decode_type = decode_type
         if temp is not None:  # Do not change temperature if not provided
@@ -385,6 +390,14 @@ class AttentionModel(nn.Module):
 
         return cost, ll
 
+    def get_and_reset_interactions(self,use_cuda, reinforce):
+        i = self.decoder.interactions.item()
+        self.decoder.interactions.zero_()
+        i = i*torch.cuda.device_count() if use_cuda and reinforce else i
+
+        #print("**************** i ***************")
+        #print(i)
+        return i
 
     def beam_search(self, *args, **kwargs):
         return self.problem.beam_search(*args, **kwargs, model=self)
@@ -464,12 +477,12 @@ class AttentionModel(nn.Module):
         # TSP
         return self.init_embed(input)
 
-    def _inner(self, input, embeddings):
+    def _inner(self, input, embeddings, init_state=None):
 
         outputs = []
-        sequences = []
+        sequences = [] if init_state is None else [init_state.first_a.squeeze(-1)]
 
-        state = self.problem.make_state(input)
+        state = self.problem.make_state(input) if init_state is None else init_state
         # Compute keys, values for the glimpse and keys for the logits once as they can be reused in every step
         fixed = self.precompute(embeddings)
 
@@ -480,11 +493,10 @@ class AttentionModel(nn.Module):
         while not (state.all_finished()):
 
             log_p, mask = self.decoder(fixed, state)
-            prob,mask_ = log_p.exp()[:, 0, :], mask[:, 0, :]
+            prob, mask_ = log_p.exp()[:, 0, :], mask[:, 0, :]
 
-            prob_, mask_ = log_p[:, 0, :], mask[:, 0, :]
             # Select the indices of the next nodes in the sequences, result (batch_size) long
-            selected = self._select_node(prob,mask_)  # Squeeze out steps dimension
+            selected = self._select_node(prob, mask_)  # Squeeze out steps dimension
             state = state.update(selected)
             # Now make log_p, selected desired output size by 'unshrinking'
             if self.shrink_size is not None and state.ids.size(0) < batch_size:
@@ -580,3 +592,46 @@ class AttentionModel(nn.Module):
             .expand(v.size(0), v.size(1) if num_steps is None else num_steps, v.size(2), self.n_heads, -1)
             .permute(3, 0, 1, 2, 4)  # (n_heads, batch_size, num_steps, graph_size, head_dim)
         )
+    def run_actions(self, state, actions, batch, fixed):
+        outputs = []
+        # state = state.to(batch.device)
+        # fixed = fixed.to(batch.device)
+        # self.decoder = self.decoder.to(batch.device)
+
+        for i,action in enumerate(actions.t()):
+            action = action.long().to(batch.device)
+
+            log_p, mask = self.decoder(fixed, state) #self._get_log_p(fixed, state)
+            # Select the indices of the next nodes in the sequences, result (batch_size) long
+            log_p = log_p.squeeze(1)
+            # Collect output of step
+            log_p = log_p.gather(1, action.unsqueeze(-1)).squeeze(-1)
+
+            outputs.append(log_p)
+
+            state = state.update(action, update_length=True)
+
+
+        outputs = torch.stack(outputs, 1)
+        #state.print_state()
+        #print(state.get_final_cost())
+        return outputs
+
+    def supervised_log_likelihood(self, batch, file_name='generic_name'):
+        self.decoder.count_interactions = False
+        embeddings = self.forward(batch, only_encoder=True)
+        init_fixed = self.precompute(embeddings)
+        init_state = self.problem.make_state(batch)
+
+        # sampling the first city (not changing the TSP)
+        log_p, mask = self.decoder(init_fixed, init_state)
+        # Select the indices of the next nodes in the sequences, result (batch_size) long
+        first_cities = self._select_node(log_p.exp()[:, 0, :], mask[:, 0, :])
+        #_, next_city = utils_gumbel.sample_gumbel_argmax(log_p)
+        t = concorde_solver.solve_batch_graphs(batch, first_cities, file_name)
+        log_p_direct = self.run_actions(init_state, t.actions, batch, init_fixed)
+        self.decoder.count_interactions = True
+
+        return log_p_direct
+
+
